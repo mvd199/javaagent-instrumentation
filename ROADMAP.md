@@ -141,3 +141,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
   * Use `inst.retransformClasses(...)` on already loaded classes matching the whitelist.
 * **Acceptance Criteria**:
   * The agent JAR can be attached to a running JVM via `jcmd <pid> JVMTI.agent_load <jar>=classes.cfg` or the Attach API without restarting the process.
+
+### 9. Fix agent loading 
+Pre-existing, not from this PR: the DurationTransformer constructor sets a static callback, so creating a second transformer replaces the first one’s callback.
+Instrumented code also only works if its classloader can see the agent classes.

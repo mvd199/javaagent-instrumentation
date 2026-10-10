@@ -1,7 +1,7 @@
 package mvd.instrumentation.demo;
 
 /**
- * Demo runner class. Not listed in classes.cfg, so its own methods
+ * Demo runner class. Not listed in demo.cfg, so its own methods
  * (including main) are not instrumented, keeping console output clean.
  */
 public class DemoApp {

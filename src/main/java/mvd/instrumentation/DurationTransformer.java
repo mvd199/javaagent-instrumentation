@@ -81,14 +81,12 @@ public class DurationTransformer implements ClassFileTransformer {
     public static void popAndRegisterStartTime(final String methodName) {
         long startTime = TIMESTAMPS.get().pop();
         if (startTime != LongStack.SENTINEL) {
-            registerStartTimeFunction.accept(methodName, startTime);
+            try {
+                registerStartTimeFunction.accept(methodName, startTime);
+            } catch (Throwable ignored) {
+                // Runs in a finally-style handler: must never replace the instrumented method's outcome.
+            }
         }
-    }
-
-    /** Used by legacy instrumentation code or tests. */
-    @Deprecated
-    public static void registerStartTime(final String methodName, final long startTimeNanos) {
-        registerStartTimeFunction.accept(methodName, startTimeNanos);
     }
 
     static class LongStack {
@@ -99,20 +97,19 @@ public class DurationTransformer implements ClassFileTransformer {
 
         LongStack() {
             this.elements = new long[INITIAL_CAPACITY];
-            this.elements[0] = SENTINEL;
-            this.size = 0;
         }
 
         void push(long val) {
-            if (size + 1 == elements.length) {
+            if (size == elements.length) {
                 elements = Arrays.copyOf(elements, elements.length * 2);
             }
-            elements[++size] = val;
+            elements[size++] = val;
         }
 
+        /** Returns {@link #SENTINEL} when the stack is empty. */
         long pop() {
             if (size > 0) {
-                return elements[size--];
+                return elements[--size];
             }
             return SENTINEL;
         }

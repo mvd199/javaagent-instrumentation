@@ -3,12 +3,13 @@ M2_CACHE  ?= $(HOME)/.m2
 WORKSPACE ?= $(shell pwd)
 
 DOCKER_RUN = docker run --rm \
+	--user $(shell id -u):$(shell id -g) \
 	-v "$(WORKSPACE)":/workspace \
 	-w /workspace \
-	-v "$(M2_CACHE)":/root/.m2 \
+	-e MAVEN_CONFIG=/var/maven/.m2 -e MAVEN_OPTS=-Duser.home=/var/maven -v "$(M2_CACHE)":/var/maven/.m2 \
 	$(IMAGE)
 
-.PHONY: all test package clean compile demo help
+.PHONY: all check-docker test package clean compile demo help
 
 all: test
 
@@ -29,7 +30,7 @@ clean: check-docker
 
 demo: check-docker
 	$(DOCKER_RUN) mvn test-compile package -DskipTests -B
-	$(DOCKER_RUN) java -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg \
+	$(DOCKER_RUN) java -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=demo.cfg \
 		-cp target/test-classes:target/classes \
 		mvd.instrumentation.demo.DemoApp
 

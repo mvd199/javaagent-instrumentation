@@ -2,7 +2,7 @@ package mvd.instrumentation.demo;
 
 /**
  * Sample service used to demonstrate DurationAgent instrumentation.
- * Listed in classes.cfg so all its methods are instrumented.
+ * Listed in demo.cfg so all its methods are instrumented.
  */
 public class DemoService {
 

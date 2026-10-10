@@ -81,10 +81,11 @@ Notice:
 List the fully qualified names of the classes you want to instrument, one per line. For example:
 
 ```text
-mvd.instrumentation.demo.DemoService
 com.mycompany.service.OrderService
 com.mycompany.repository.UserRepository
 ```
+
+The bundled `demo.cfg` (used by `make demo`) whitelists only `mvd.instrumentation.demo.DemoService`.
 
 ### 2. Attach the Agent to Your Application
 Add the `-javaagent` flag to your JVM startup options:
