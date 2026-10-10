@@ -16,7 +16,7 @@ public class DemoApp {
 
         System.out.println("[Step 1] Calling fastTask() (~10ms)...");
         service.fastTask();
-        System.out.println("         -> Completed! (No log produced, under 50ms threshold)\n");
+        System.out.println("         -> Completed! (Under the 50ms threshold, so it is not recorded)\n");
 
         System.out.println("[Step 2] Calling slowQuery() (~120ms)...");
         service.slowQuery();

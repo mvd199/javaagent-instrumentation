@@ -5,7 +5,6 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.security.ProtectionDomain;
 import java.util.Arrays;
-import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
 import javassist.CannotCompileException;
@@ -15,12 +14,12 @@ import javassist.CtClass;
 import javassist.CtMethod;
 
 public class DurationTransformer implements ClassFileTransformer {
-    private static BiConsumer<String, Long> registerStartTimeFunction = (s, d) -> { };
+    private static DurationCallback registerStartTimeFunction = (method, startNanos) -> { };
 
     private final Predicate<String> allowTransformationPredicate;
     private final ClassPool classPool = ClassPool.getDefault();
 
-    DurationTransformer(Predicate<String> allowTransformationPredicate, BiConsumer<String, Long> registerFunction) {
+    DurationTransformer(Predicate<String> allowTransformationPredicate, DurationCallback registerFunction) {
         this.allowTransformationPredicate = allowTransformationPredicate;
         registerStartTimeFunction = registerFunction;
     }
@@ -82,11 +81,19 @@ public class DurationTransformer implements ClassFileTransformer {
         long startTime = TIMESTAMPS.get().pop();
         if (startTime != LongStack.SENTINEL) {
             try {
-                registerStartTimeFunction.accept(methodName, startTime);
+                registerStartTimeFunction.onCallFinished(methodName, startTime);
             } catch (Throwable ignored) {
                 // Runs in a finally-style handler: must never replace the instrumented method's outcome.
             }
         }
+    }
+
+    /**
+     * Number of instrumented frames still active on the current thread. Called from the callback,
+     * which runs after the finished method was popped, so an outermost call reports 0.
+     */
+    static int currentDepth() {
+        return TIMESTAMPS.get().size();
     }
 
     static class LongStack {

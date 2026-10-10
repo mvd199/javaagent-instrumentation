@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
 import static org.junit.Assert.assertEquals;
@@ -113,6 +112,31 @@ public class DurationTransformerTest {
     }
 
     @Test
+    public void currentDepthInsideCallbackCountsActiveInstrumentedFrames() throws Exception {
+        List<Integer> depths = new ArrayList<>();
+        Object target = instrumentedInstance((method, start) -> depths.add(DurationTransformer.currentDepth()));
+
+        target.getClass().getMethod("recurse", int.class).invoke(target, 2);
+
+        // Completion order is innermost first: recurse(0) has 2 active parents, the outermost call has none.
+        assertEquals(java.util.Arrays.asList(2, 1, 0), depths);
+        assertEquals(0, DurationTransformer.currentDepth());
+    }
+
+    @Test
+    public void currentDepthIsRestoredAfterAnException() throws Exception {
+        Object target = instrumentedInstance((method, start) -> { });
+
+        try {
+            target.getClass().getMethod("fail").invoke(target);
+        } catch (java.lang.reflect.InvocationTargetException expected) {
+            // the fixture throws on purpose
+        }
+
+        assertEquals(0, DurationTransformer.currentDepth());
+    }
+
+    @Test
     public void throwingCallbackDoesNotChangeReturnValue() throws Exception {
         Object target = instrumentedInstance(throwingCallback());
 
@@ -189,7 +213,7 @@ public class DurationTransformerTest {
         });
     }
 
-    private static BiConsumer<String, Long> throwingCallback() {
+    private static DurationCallback throwingCallback() {
         return (method, start) -> {
             throw new RuntimeException("callback failure");
         };
@@ -202,7 +226,7 @@ public class DurationTransformerTest {
         });
     }
 
-    private Object instrumentedInstance(BiConsumer<String, Long> callback) throws Exception {
+    private Object instrumentedInstance(DurationCallback callback) throws Exception {
         byte[] transformed = new DurationTransformer(TARGET::equals, callback)
                 .transform(null, TARGET, null, null, classBytes(TARGET));
         assertNotNull(transformed);

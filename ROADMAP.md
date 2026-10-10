@@ -10,8 +10,8 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 - [ ] **2. Configurable Duration Threshold** *(High Priority / Usability)*
 - [ ] **3. Wildcard & Package Prefix Matching** *(High Priority / Usability)*
 - [ ] **4. Shaded Dependency Relocation** *(Medium Priority / Safety)*
-- [ ] **5. Call Depth & Hierarchy Indentation** *(Medium Priority / UX)*
-- [ ] **6. Structured & Configurable Output Format (JSON / Sinks)** *(Medium Priority / UX)*
+- [x] **5. Call Depth & Hierarchy Indentation** *(Medium Priority / UX)*
+- [x] **6. Structured & Configurable Output Format (JSON / Sinks)** *(Medium Priority / UX)*
 - [ ] **7. Support for Modern Java Editions & Tooling** *(Long-term / Modernization)*
 - [ ] **8. Dynamic JVM Attachment (`agentmain`)** *(Long-term / Advanced)*
 
@@ -87,7 +87,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 ---
 
 ### 5. Call Depth & Hierarchy Indentation
-* **Status**: Open
+* **Status**: Completed
 * **Priority**: Medium (UX)
 * **Problem**: When instrumented method `A()` calls instrumented method `B()`, both are printed at the same indentation level. It is difficult to discern whether `B()` is a standalone call or part of `A()`'s execution tree.
 * **Proposed Solution**:
@@ -97,22 +97,27 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 * **Acceptance Criteria**:
   * Nested calls appear indented under parent methods in stdout.
   * Call depth counter is thread-safe and properly decremented even on exceptions.
+* **Implementation notes**: Delivered together with #6. Depth is `DurationTransformer.currentDepth()` (the size of the existing per-thread `LongStack`, so it is exception-safe by construction). It is stored on every record, shown as indentation in the `summary` call tree, and emitted as `depth` in `json`. Output is no longer printed live, so "nested calls appear indented" applies to the end-of-run report.
 
 ---
 
 ### 6. Structured & Configurable Output Format (JSON & Sinks)
-* **Status**: Open
+* **Status**: Completed
 * **Priority**: Medium (UX / Integration)
-* **Problem**: Output is currently hardcoded to `System.out.println` in plain text format (`Method.name() : 123`). This pollutes stdout for applications relying on structured stdout logging and cannot easily be ingested by log aggregators (Elasticsearch, Datadog, Prometheus). In addition, `System.out.println` synchronizes on `PrintStream`, which can cause thread contention.
-* **Proposed Solution**:
-  * **Structured Format (JSON)**:
-    * Support JSON line output mode (`{"timestamp": 1696871234, "thread": "main", "method": "...", "durationMs": 120}`).
-  * **Configurable Sinks**:
-    * Support writing output to a file (e.g. `-Dduration.output=file:///tmp/duration.log`) or stderr instead of stdout.
-    * Use non-blocking or lightweight buffered writing to avoid thread contention.
+* **Problem**: Output was hardcoded to `System.out.println` in plain text (`Method.name() : 123`). That polluted stdout for applications relying on structured stdout logging, could not easily be ingested by log aggregators, and `System.out.println` synchronizes on `PrintStream`, which can cause thread contention.
+* **Implemented Solution** (changed from the original "stream JSON lines" idea to buffer-and-report, for one-off debugging runs):
+  * Slow calls are recorded into an in-memory buffer (`Recorder`, lock-free queue, capped at `duration.maxEvents`, default 100000; calls over the cap are only counted). Nothing is written on the hot path.
+  * The report is written once from a JVM shutdown hook (it is not written if the JVM is killed with `kill -9`).
+  * Configured with system properties:
+    * `-Dduration.format=summary|json` (default `summary`)
+    * `-Dduration.output=stdout|stderr|<file path>` (default `stdout`; a plain path, not a `file://` URL)
+    * `-Dduration.maxEvents=<n>`
+  * `summary`: top 10 methods by total time (calls, total, max, avg) followed by a call tree per thread, indented by call depth and capped at 200 lines per thread.
+  * `json`: JSON lines `{"timestamp":…,"thread":"…","method":"…","durationMs":…,"depth":…}`, parents before children. If records were dropped at the buffer cap, the count is logged to `stderr`.
 * **Acceptance Criteria**:
-  * Users can select between `text` and `json` output formats.
-  * Output can be redirected to a dedicated log file.
+  * Users can select between `summary` and `json` output formats. *(met; the plain `text` format was replaced by `summary`)*
+  * Output can be redirected to a dedicated log file. *(met)*
+* **Not done**: a live/streaming mode and an HTML report. Records are lost if the JVM dies before the shutdown hook runs.
 
 ---
 
