@@ -1,6 +1,7 @@
 IMAGE     ?= maven:3-eclipse-temurin-11
 M2_CACHE  ?= $(HOME)/.m2
 WORKSPACE ?= $(shell pwd)
+JAVA_OPTS ?=
 
 DOCKER_RUN = docker run --rm \
 	--user $(shell id -u):$(shell id -g) \
@@ -30,7 +31,7 @@ clean: check-docker
 
 demo: check-docker
 	$(DOCKER_RUN) mvn test-compile package -DskipTests -B
-	$(DOCKER_RUN) java -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=demo.cfg \
+	$(DOCKER_RUN) java $(JAVA_OPTS) -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=demo.cfg \
 		-cp target/test-classes:target/classes \
 		mvd.instrumentation.demo.DemoApp
 
@@ -39,7 +40,7 @@ help:
 	@echo "  make         - Run unit tests (default)"
 	@echo "  make test    - Run unit tests (pass ARGS='-Dtest=...' for specific test)"
 	@echo "  make package - Build the shaded agent JAR"
-	@echo "  make demo    - Build and run the interactive showcase demo"
+	@echo "  make demo    - Build and run the interactive showcase demo (pass JAVA_OPTS='-Dduration.format=json')"
 	@echo "  make clean   - Clean the build artifacts"
 	@echo "  make compile - Compile main source files"
 
