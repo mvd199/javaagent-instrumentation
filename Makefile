@@ -8,7 +8,7 @@ DOCKER_RUN = docker run --rm \
 	-v "$(M2_CACHE)":/root/.m2 \
 	$(IMAGE)
 
-.PHONY: all test package clean compile help
+.PHONY: all test package clean compile demo help
 
 all: test
 
@@ -27,10 +27,18 @@ compile: check-docker
 clean: check-docker
 	$(DOCKER_RUN) mvn clean $(ARGS)
 
+demo: check-docker
+	$(DOCKER_RUN) mvn test-compile package -DskipTests -B
+	$(DOCKER_RUN) java -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg \
+		-cp target/test-classes:target/classes \
+		mvd.instrumentation.demo.DemoApp
+
 help:
 	@echo "Available targets:"
 	@echo "  make         - Run unit tests (default)"
 	@echo "  make test    - Run unit tests (pass ARGS='-Dtest=...' for specific test)"
 	@echo "  make package - Build the shaded agent JAR"
+	@echo "  make demo    - Build and run the interactive showcase demo"
 	@echo "  make clean   - Clean the build artifacts"
 	@echo "  make compile - Compile main source files"
+
