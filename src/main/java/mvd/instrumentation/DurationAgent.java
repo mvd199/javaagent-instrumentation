@@ -17,7 +17,7 @@ public class DurationAgent {
         inst.addTransformer(new DurationTransformer(whiteList::contains, DurationAgent::registerTime));
     }
 
-    private static Set<String> createWhitelist(String agentArgs) {
+    static Set<String> createWhitelist(String agentArgs) {
         if (agentArgs == null) {
             throw new IllegalArgumentException("Agent args can't be null.");
         }
