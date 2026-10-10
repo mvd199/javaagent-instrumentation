@@ -17,3 +17,12 @@ jobs:
           cache: maven
       - name: Run tests
         run: mvn -B test
+      - name: Coverage summary
+        if: always()
+        run: scripts/coverage-summary.sh | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: target/site/jacoco
