@@ -99,3 +99,6 @@ Use a debugger, APM traces, or logs to identify potential hotspot packages and c
 
 ## Roadmap & Planned Improvements
 See [`ROADMAP.md`](https://github.com/mvd199/javaagent-instrumentation/blob/master/ROADMAP.md) for the full list of prioritized improvements, bug fixes, and architectural evolutions.
+
+## License
+Copyright 2026 MikeD. Licensed under the [Apache License, Version 2.0](LICENSE).
