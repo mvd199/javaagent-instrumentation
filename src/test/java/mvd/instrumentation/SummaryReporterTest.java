@@ -130,6 +130,19 @@ public class SummaryReporterTest {
         assertTrue(lines.contains("  ... 5 more"));
     }
 
+    @Test
+    public void alignsOffsetsBeyondFourDigits() {
+        List<CallRecord> records = Arrays.asList(
+                call("main", "a.B.early()", 0, 100, 0),
+                call("main", "a.B.late()", 12345, 100, 0));
+
+        List<String> lines = lines(render(new Report(records, 0, 50)));
+
+        int tree = indexOfLineContaining(lines, "Call tree: thread \"main\"");
+        assertEquals("  [    0 ms]    100 ms  a.B.early()", lines.get(tree + 1));
+        assertEquals("  [12345 ms]    100 ms  a.B.late()", lines.get(tree + 2));
+    }
+
     private static int indexOfLineContaining(List<String> lines, String fragment) {
         for (int i = 0; i < lines.size(); i++) {
             if (lines.get(i).contains(fragment)) {

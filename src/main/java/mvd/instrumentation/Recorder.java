@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntSupplier;
 
@@ -17,8 +16,7 @@ final class Recorder {
     private final int maxEvents;
     private final IntSupplier depthSource;
     private final Queue<CallRecord> records = new ConcurrentLinkedQueue<>();
-    private final AtomicInteger accepted = new AtomicInteger();
-    private final AtomicLong dropped = new AtomicLong();
+    private final AtomicLong totalSlowCalls = new AtomicLong();
 
     /** {@code depthSource} is only consulted for calls that pass the threshold, keeping fast calls cheap. */
     Recorder(long thresholdMs, int maxEvents, IntSupplier depthSource) {
@@ -32,8 +30,7 @@ final class Recorder {
         if (durationMs <= thresholdMs) {
             return;
         }
-        if (accepted.incrementAndGet() > maxEvents) {
-            dropped.incrementAndGet();
+        if (totalSlowCalls.incrementAndGet() > maxEvents) {
             return;
         }
         records.add(new CallRecord(startNanos, System.currentTimeMillis() - durationMs,
@@ -41,6 +38,8 @@ final class Recorder {
     }
 
     Report snapshot() {
-        return new Report(new ArrayList<>(records), dropped.get(), thresholdMs);
+        long total = totalSlowCalls.get();
+        long dropped = Math.max(0L, total - maxEvents);
+        return new Report(new ArrayList<>(records), dropped, thresholdMs);
     }
 }

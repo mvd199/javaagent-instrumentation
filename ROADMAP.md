@@ -113,7 +113,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
     * `-Dduration.output=stdout|stderr|<file path>` (default `stdout`; a plain path, not a `file://` URL)
     * `-Dduration.maxEvents=<n>`
   * `summary`: top 10 methods by total time (calls, total, max, avg) followed by a call tree per thread, indented by call depth and capped at 200 lines per thread.
-  * `json`: JSON lines `{"timestamp":…,"thread":"…","method":"…","durationMs":…,"depth":…}`, parents before children. A final `{"dropped":N}` line is added only when records were dropped.
+  * `json`: JSON lines `{"timestamp":…,"thread":"…","method":"…","durationMs":…,"depth":…}`, parents before children. If records were dropped at the buffer cap, the count is logged to `stderr`.
 * **Acceptance Criteria**:
   * Users can select between `summary` and `json` output formats. *(met; the plain `text` format was replaced by `summary`)*
   * Output can be redirected to a dedicated log file. *(met)*

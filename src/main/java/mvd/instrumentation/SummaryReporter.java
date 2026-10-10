@@ -68,6 +68,13 @@ final class SummaryReporter implements Reporter {
 
     private static void writeCallTrees(List<CallRecord> calls, PrintWriter out) {
         long origin = calls.get(0).startNanos;
+        long maxOffset = 0;
+        for (CallRecord call : calls) {
+            maxOffset = Math.max(maxOffset, (call.startNanos - origin) / 1_000_000L);
+        }
+        int offsetWidth = Math.max(4, String.valueOf(maxOffset).length());
+        String treeLineFormat = "  [%" + offsetWidth + "d ms] %6d ms  %s%s";
+
         Map<String, List<CallRecord>> byThread = new LinkedHashMap<>();
         for (CallRecord call : calls) {
             byThread.computeIfAbsent(call.thread, k -> new ArrayList<>()).add(call);
@@ -77,7 +84,7 @@ final class SummaryReporter implements Reporter {
             out.println("--- Call tree: thread \"" + thread.getKey() + "\" --------------------------------------------");
             List<CallRecord> threadCalls = thread.getValue();
             for (CallRecord call : threadCalls.subList(0, Math.min(MAX_TREE_LINES_PER_THREAD, threadCalls.size()))) {
-                out.println(String.format(Locale.ROOT, "  [%4d ms] %6d ms  %s%s",
+                out.println(String.format(Locale.ROOT, treeLineFormat,
                         (call.startNanos - origin) / 1_000_000L, call.durationMs, indent(call.depth), call.method));
             }
             if (threadCalls.size() > MAX_TREE_LINES_PER_THREAD) {

@@ -62,4 +62,32 @@ public class ReportConfigTest {
     public void rejectsNonPositiveMaxEvents() {
         config(ReportConfig.MAX_EVENTS_PROPERTY, "0");
     }
+
+    @Test
+    public void handlesCaseInsensitiveFormatAndOutput() {
+        ReportConfig config = config(
+                ReportConfig.FORMAT_PROPERTY, "JSON",
+                ReportConfig.OUTPUT_PROPERTY, "STDOUT");
+
+        assertEquals("json", config.format);
+        assertEquals("STDOUT", config.output);
+        assertTrue(config.reporter() instanceof JsonReporter);
+    }
+
+    @Test
+    public void createsParentDirectoriesForFileOutput() throws Exception {
+        java.io.File dir = new java.io.File(System.getProperty("java.io.tmpdir"), "duration-test-" + System.nanoTime());
+        java.io.File file = new java.io.File(dir, "sub/report.txt");
+        try {
+            ReportConfig config = config(ReportConfig.OUTPUT_PROPERTY, file.getPath());
+            try (java.io.PrintWriter out = config.openOutput()) {
+                out.println("hello");
+            }
+            assertTrue(file.exists());
+        } finally {
+            file.delete();
+            file.getParentFile().delete();
+            dir.delete();
+        }
+    }
 }

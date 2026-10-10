@@ -1,50 +1,47 @@
 package mvd.instrumentation;
 
 import java.io.PrintWriter;
+import java.util.Locale;
 
 /**
  * JSON lines (always {@code \n}-terminated, whatever the platform), one object per slow call, ordered so parents precede their children.
- * If records were dropped at the buffer cap, a final {@code {"dropped":N}} line is added.
  */
 final class JsonReporter implements Reporter {
     @Override
     public void write(Report report, PrintWriter out) {
+        StringBuilder sb = new StringBuilder();
         for (CallRecord call : report.inCallOrder()) {
-            out.print("{\"timestamp\":");
-            out.print(call.timestampMillis);
-            out.print(",\"thread\":");
-            quote(call.thread, out);
-            out.print(",\"method\":");
-            quote(call.method, out);
-            out.print(",\"durationMs\":");
-            out.print(call.durationMs);
-            out.print(",\"depth\":");
-            out.print(call.depth);
-            out.print("}\n");
-        }
-        if (report.dropped > 0) {
-            out.print("{\"dropped\":" + report.dropped + "}\n");
+            sb.setLength(0);
+            sb.append("{\"timestamp\":").append(call.timestampMillis);
+            sb.append(",\"thread\":");
+            quote(call.thread, sb);
+            sb.append(",\"method\":");
+            quote(call.method, sb);
+            sb.append(",\"durationMs\":").append(call.durationMs);
+            sb.append(",\"depth\":").append(call.depth);
+            sb.append("}\n");
+            out.print(sb.toString());
         }
     }
 
-    private static void quote(String value, PrintWriter out) {
-        out.print('"');
+    private static void quote(String value, StringBuilder sb) {
+        sb.append('"');
         for (int i = 0; i < value.length(); i++) {
             char c = value.charAt(i);
             switch (c) {
-                case '"': out.print("\\\""); break;
-                case '\\': out.print("\\\\"); break;
-                case '\n': out.print("\\n"); break;
-                case '\r': out.print("\\r"); break;
-                case '\t': out.print("\\t"); break;
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
                 default:
                     if (c < 0x20) {
-                        out.print(String.format("\\u%04x", (int) c));
+                        sb.append(String.format(Locale.ROOT, "\\u%04x", (int) c));
                     } else {
-                        out.print(c);
+                        sb.append(c);
                     }
             }
         }
-        out.print('"');
+        sb.append('"');
     }
 }

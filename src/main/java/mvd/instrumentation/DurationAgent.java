@@ -21,19 +21,38 @@ public class DurationAgent {
     }
 
     static void writeReport(Recorder recorder, ReportConfig config) {
-        try (PrintWriter out = config.openOutput()) {
-            if (!writeTo(out, config.reporter(), recorder.snapshot())) {
-                System.err.println("DurationAgent: report to " + config.output + " may be incomplete (write error)");
+        Report report = recorder.snapshot();
+        if (report.dropped > 0 && "json".equals(config.format)) {
+            System.err.println("DurationAgent: dropped " + report.dropped + " calls exceeding maxEvents (" + config.maxEvents + ")");
+        }
+        PrintWriter out = null;
+        boolean error = false;
+        try {
+            out = config.openOutput();
+            if (!writeTo(out, config.reporter(), report)) {
+                error = true;
             }
         } catch (IOException | RuntimeException e) {
             System.err.println("DurationAgent: failed to write report to " + config.output);
             e.printStackTrace();
+            return;
+        } finally {
+            if (out != null) {
+                out.close();
+                if (out.checkError()) {
+                    error = true;
+                }
+            }
+        }
+        if (error) {
+            System.err.println("DurationAgent: report to " + config.output + " may be incomplete (write error)");
         }
     }
 
     /** Returns false if the writer hit an I/O error, which PrintWriter otherwise swallows. */
     static boolean writeTo(PrintWriter out, Reporter reporter, Report report) {
         reporter.write(report, out);
+        out.flush();
         return !out.checkError();
     }
 

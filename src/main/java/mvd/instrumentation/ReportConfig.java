@@ -6,7 +6,9 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Locale;
 import java.util.function.Function;
 
 /** Report settings, read from system properties: duration.format, duration.output, duration.maxEvents. */
@@ -22,11 +24,13 @@ final class ReportConfig {
     final String format;
     final String output;
     final int maxEvents;
+    final Reporter reporter;
 
     private ReportConfig(String format, String output, int maxEvents) {
         this.format = format;
         this.output = output;
         this.maxEvents = maxEvents;
+        this.reporter = "json".equals(format) ? new JsonReporter() : new SummaryReporter();
     }
 
     static ReportConfig fromSystemProperties() {
@@ -34,7 +38,7 @@ final class ReportConfig {
     }
 
     static ReportConfig from(Function<String, String> properties) {
-        String format = valueOrDefault(properties.apply(FORMAT_PROPERTY), DEFAULT_FORMAT);
+        String format = valueOrDefault(properties.apply(FORMAT_PROPERTY), DEFAULT_FORMAT).toLowerCase(Locale.ROOT);
         if (!"summary".equals(format) && !"json".equals(format)) {
             throw new IllegalArgumentException("Unknown " + FORMAT_PROPERTY + ": " + format + " (expected summary or json)");
         }
@@ -55,18 +59,23 @@ final class ReportConfig {
     }
 
     Reporter reporter() {
-        return "json".equals(format) ? new JsonReporter() : new SummaryReporter();
+        return reporter;
     }
 
     /** Resolved at call time so a redirected System.out/err at shutdown is honoured. Closing never closes stdout/stderr. */
     PrintWriter openOutput() throws IOException {
-        if ("stdout".equals(output)) {
+        if ("stdout".equalsIgnoreCase(output)) {
             return nonClosing(System.out);
         }
-        if ("stderr".equals(output)) {
+        if ("stderr".equalsIgnoreCase(output)) {
             return nonClosing(System.err);
         }
-        return new PrintWriter(Files.newBufferedWriter(Paths.get(output), StandardCharsets.UTF_8));
+        Path path = Paths.get(output);
+        Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        return new PrintWriter(Files.newBufferedWriter(path, StandardCharsets.UTF_8));
     }
 
     private static PrintWriter nonClosing(PrintStream stream) {

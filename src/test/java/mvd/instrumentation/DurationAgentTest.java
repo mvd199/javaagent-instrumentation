@@ -96,4 +96,47 @@ public class DurationAgentTest {
         assertEquals(true, DurationAgent.writeTo(new java.io.PrintWriter(ok), new JsonReporter(),
                 new Report(java.util.Collections.<CallRecord>emptyList(), 0, 50)));
     }
+
+    @Test
+    public void writeToReportsFalseWhenFlushFails() {
+        java.io.Writer failingFlush = new java.io.Writer() {
+            @Override public void write(char[] buf, int off, int len) { }
+            @Override public void flush() throws java.io.IOException {
+                throw new java.io.IOException("flush failed");
+            }
+            @Override public void close() { }
+        };
+        Recorder recorder = new Recorder(0, 10, () -> 0);
+        recorder.record("a.B.slow()", System.nanoTime() - 20_000_000L);
+
+        assertEquals(false, DurationAgent.writeTo(new java.io.PrintWriter(failingFlush), new JsonReporter(), recorder.snapshot()));
+    }
+
+    @Test
+    public void writeReportPrintsDroppedCallsToStderrInJsonFormat() throws Exception {
+        java.io.PrintStream originalErr = System.err;
+        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
+        System.setErr(new java.io.PrintStream(errBytes));
+        try {
+            File output = new File(folder.getRoot(), "report.jsonl");
+            ReportConfig config = ReportConfig.from(property -> {
+                switch (property) {
+                    case ReportConfig.FORMAT_PROPERTY: return "json";
+                    case ReportConfig.OUTPUT_PROPERTY: return output.getPath();
+                    case ReportConfig.MAX_EVENTS_PROPERTY: return "1";
+                    default: return null;
+                }
+            });
+            Recorder recorder = new Recorder(0, 1, () -> 0);
+            recorder.record("a.B.first()", System.nanoTime() - 20_000_000L);
+            recorder.record("a.B.second()", System.nanoTime() - 20_000_000L);
+
+            DurationAgent.writeReport(recorder, config);
+
+            String errOutput = errBytes.toString();
+            assertTrue(errOutput, errOutput.contains("DurationAgent: dropped 1 calls exceeding maxEvents (1)"));
+        } finally {
+            System.setErr(originalErr);
+        }
+    }
 }

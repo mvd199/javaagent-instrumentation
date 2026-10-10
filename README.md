@@ -124,7 +124,7 @@ java -Dduration.format=json -Dduration.output=/tmp/duration.jsonl \
      -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg -jar your-app.jar
 ```
 
-Each JSON line looks like `{"timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is the number of instrumented methods on the same thread that were still running when the call was made. The report is not written if the JVM is killed with `kill -9`.
+Each JSON line looks like `{"timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is the number of instrumented methods on the same thread that were still running when the call was made. If slow calls exceed `duration.maxEvents`, dropped stats are written to `stderr`. Property values like format and stdout/stderr are case-insensitive, and missing parent directories for file paths are created automatically. The report is not written if the JVM is killed with `kill -9`.
 
 ## How to know which classes to include?
 Use a debugger, APM traces, or logs to identify potential hotspot packages and classes to instrument.

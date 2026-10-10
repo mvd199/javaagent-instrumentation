@@ -42,22 +42,22 @@ public class JsonReporterTest {
     }
 
     @Test
-    public void appendsDroppedCountOnlyWhenSomethingWasDropped() {
+    public void doesNotIncludeDroppedCountInJsonOutput() {
         List<CallRecord> records = Arrays.asList(new CallRecord(1L, 1L, "main", "a.B.m()", 60, 0));
 
-        String[] withDrops = render(new Report(records, 7, 50)).split("\\R");
-        String[] withoutDrops = render(new Report(records, 0, 50)).split("\\R");
+        String[] output = render(new Report(records, 7, 50)).split("\\R");
 
-        assertEquals(2, withDrops.length);
-        assertEquals("{\"dropped\":7}", withDrops[1]);
-        assertEquals(1, withoutDrops.length);
+        assertEquals(1, output.length);
+        assertEquals("{\"timestamp\":1,\"thread\":\"main\",\"method\":\"a.B.m()\",\"durationMs\":60,\"depth\":0}", output[0]);
     }
 
     @Test
     public void linesEndWithNewlineRegardlessOfPlatform() {
-        List<CallRecord> records = Arrays.asList(new CallRecord(1L, 1L, "main", "a.B.m()", 60, 0));
+        List<CallRecord> records = Arrays.asList(
+                new CallRecord(1L, 1L, "main", "a.B.m1()", 60, 0),
+                new CallRecord(2L, 2L, "main", "a.B.m2()", 70, 0));
 
-        String text = render(new Report(records, 3, 50));
+        String text = render(new Report(records, 0, 50));
 
         assertEquals(2, text.split("\n", -1).length - 1);
         assertEquals(false, text.contains("\r"));
