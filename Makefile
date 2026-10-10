@@ -19,6 +19,7 @@ check-docker:
 
 test: check-docker
 	$(DOCKER_RUN) mvn test $(ARGS)
+	@scripts/coverage-summary.sh
 
 package: check-docker
 	$(DOCKER_RUN) mvn package $(ARGS)
