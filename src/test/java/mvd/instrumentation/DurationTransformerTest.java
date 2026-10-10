@@ -1,7 +1,6 @@
 package mvd.instrumentation;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -72,7 +71,6 @@ public class DurationTransformerTest {
         assertTrue("Start time should be a past System.nanoTime() value", elapsedNanos >= 0);
     }
 
-    @Ignore("Known bug: insertAfter is not 'finally', so a method that throws is never reported")
     @Test
     public void reportsDurationWhenMethodThrows() throws Exception {
         Object target = instrumentedInstance();
@@ -85,6 +83,53 @@ public class DurationTransformerTest {
 
         assertEquals(1, reportedMethods.size());
         assertEquals("mvd.instrumentation.SampleTarget.fail()", reportedMethods.get(0));
+    }
+
+    @Test
+    public void longStackReturnsSentinelWhenEmpty() {
+        DurationTransformer.LongStack stack = new DurationTransformer.LongStack();
+        assertEquals(0, stack.size());
+        assertEquals(32, stack.capacity());
+        assertEquals(DurationTransformer.LongStack.SENTINEL, stack.pop());
+        assertEquals(0, stack.size());
+    }
+
+    @Test
+    public void longStackPushesAndPopsInLifoOrder() {
+        DurationTransformer.LongStack stack = new DurationTransformer.LongStack();
+        stack.push(100L);
+        stack.push(200L);
+        stack.push(300L);
+
+        assertEquals(3, stack.size());
+        assertEquals(300L, stack.pop());
+        assertEquals(200L, stack.pop());
+        assertEquals(100L, stack.pop());
+        assertEquals(DurationTransformer.LongStack.SENTINEL, stack.pop());
+    }
+
+    @Test
+    public void longStackExpandsCapacityBeyondInitial32() {
+        DurationTransformer.LongStack stack = new DurationTransformer.LongStack();
+        for (int i = 0; i < 40; i++) {
+            stack.push((long) i);
+        }
+
+        assertTrue("Capacity should expand beyond 32", stack.capacity() > 32);
+        assertEquals(40, stack.size());
+
+        for (int i = 39; i >= 0; i--) {
+            assertEquals((long) i, stack.pop());
+        }
+        assertEquals(DurationTransformer.LongStack.SENTINEL, stack.pop());
+    }
+
+    @Test
+    public void popAndRegisterStartTimeIgnoresSentinel() {
+        DurationTransformer transformer = transformerAllowing(TARGET::equals);
+        // Pop without any preceding push: should hit SENTINEL and ignore callback
+        DurationTransformer.popAndRegisterStartTime("unmatched.Method");
+        assertTrue("Callback should not be invoked when popping sentinel", reportedMethods.isEmpty());
     }
 
     private DurationTransformer transformerAllowing(Predicate<String> whitelist) {

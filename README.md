@@ -96,6 +96,5 @@ java -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg -jar yo
 ## How to know which classes to include?
 Use a debugger, APM traces, or logs to identify potential hotspot packages and classes to instrument.
 
-## TODO
-1. Make minimal duration configurable (e.g. via agent arguments or system properties).
-2. Allow class matching by prefix or wildcard (e.g. `com.mycompany.*`).
+## Roadmap & Planned Improvements
+See [`ROADMAP.md`](https://github.com/mvd199/javaagent-instrumentation/blob/master/ROADMAP.md) for the full list of prioritized improvements, bug fixes, and architectural evolutions.
