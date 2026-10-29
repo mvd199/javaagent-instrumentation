@@ -134,7 +134,9 @@ public class DurationAgentTest {
             DurationAgent.writeReport(recorder, config);
 
             String errOutput = errBytes.toString();
-            assertTrue(errOutput, errOutput.contains("DurationAgent: dropped 1 calls exceeding maxEvents (1)"));
+            assertTrue(errOutput, errOutput.contains("DurationAgent:"));
+            assertTrue(errOutput, errOutput.contains("[WARN]"));
+            assertTrue(errOutput, errOutput.contains("dropped 1 calls exceeding maxEvents (1)"));
         } finally {
             System.setErr(originalErr);
         }

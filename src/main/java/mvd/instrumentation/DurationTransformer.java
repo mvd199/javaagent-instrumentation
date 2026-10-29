@@ -54,12 +54,14 @@ public class DurationTransformer implements ClassFileTransformer {
             }
 
             if (isClassModified) {
-                System.out.println("Transforming: " + className);
+                if (AgentLogger.isDebugEnabled()) {
+                    AgentLogger.debug("Transforming: " + className);
+                }
                 result = ctClass.toBytecode();
             }
             ctClass.detach();
         } catch (Throwable e) {
-            e.printStackTrace();
+            AgentLogger.error("Failed to transform class: " + className, e);
         }
         return result;
     }

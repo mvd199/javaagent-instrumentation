@@ -52,7 +52,9 @@ public class ReportConfigTest {
 
             assertEquals(ReportConfig.MAX_THRESHOLD, config.threshold);
             String err = errBytes.toString();
-            assertTrue(err, err.contains("DurationAgent: mvd.instrumentation.threshold (200000 ms) exceeds maximum limit of 180000 ms (3 minutes); capping to 180000 ms."));
+            assertTrue(err, err.contains("DurationAgent:"));
+            assertTrue(err, err.contains("[WARN]"));
+            assertTrue(err, err.contains(ReportConfig.THRESHOLD_PROPERTY + " (200000 ms) exceeds maximum limit of 180000 ms (3 minutes); capping to 180000 ms."));
         } finally {
             System.setErr(originalErr);
         }
@@ -68,7 +70,9 @@ public class ReportConfigTest {
 
             assertEquals(ReportConfig.DEFAULT_THRESHOLD, config.threshold);
             String err = errBytes.toString();
-            assertTrue(err, err.contains("DurationAgent: invalid mvd.instrumentation.threshold '-5'; falling back to default (50 ms)."));
+            assertTrue(err, err.contains("DurationAgent:"));
+            assertTrue(err, err.contains("[WARN]"));
+            assertTrue(err, err.contains("invalid " + ReportConfig.THRESHOLD_PROPERTY + " '-5'; falling back to default (50 ms)."));
         } finally {
             System.setErr(originalErr);
         }
@@ -84,7 +88,9 @@ public class ReportConfigTest {
 
             assertEquals(ReportConfig.DEFAULT_THRESHOLD, config.threshold);
             String err = errBytes.toString();
-            assertTrue(err, err.contains("DurationAgent: invalid mvd.instrumentation.threshold 'invalid_num'; falling back to default (50 ms)."));
+            assertTrue(err, err.contains("DurationAgent:"));
+            assertTrue(err, err.contains("[WARN]"));
+            assertTrue(err, err.contains("invalid " + ReportConfig.THRESHOLD_PROPERTY + " 'invalid_num'; falling back to default (50 ms)."));
         } finally {
             System.setErr(originalErr);
         }

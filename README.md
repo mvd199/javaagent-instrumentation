@@ -55,8 +55,8 @@ threshold: 50 ms   recorded: 3 calls   dropped: 0   threads: 1   wall: 0.22 s
 
 To try the other report options, pass JVM options through `JAVA_OPTS`. Paths must be inside the project, which the container sees as `/workspace`:
 ```bash
-make demo JAVA_OPTS="-Dduration.format=json"
-make demo JAVA_OPTS="-Dduration.format=json -Dduration.output=/workspace/target/duration.jsonl"
+make demo JAVA_OPTS="-Dmvd.instrumentation.report.format=json"
+make demo JAVA_OPTS="-Dmvd.instrumentation.report.format=json -Dmvd.instrumentation.report.output=/workspace/target/duration.jsonl"
 ```
 
 Notice:
@@ -110,22 +110,27 @@ Add the `-javaagent` flag to your JVM startup options:
 java -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg -jar your-app.jar
 ```
 
-### 3. Configure Threshold & Report (optional)
-The report is buffered in memory and written once, when the JVM exits. Configure it with system properties:
+### 3. Configure Agent, Report & Logging (optional)
+The report is buffered in memory and written once, when the JVM exits. Configure it with system properties prefixed by `mvd.instrumentation.`:
 
-| Property | Values | Default |
-|---|---|---|
-| `mvd.instrumentation.threshold` | minimum invocation duration in milliseconds to record (capped at `180000`, 3 minutes) | `50` |
-| `duration.format` | `summary` (tables and call tree), `json` (one JSON object per line) | `summary` |
-| `duration.output` | `stdout`, `stderr` or a file path | `stdout` |
-| `duration.maxEvents` | maximum number of recorded calls; slower calls beyond it are counted as dropped | `100000` |
+| Category | Property | Values | Default | Description |
+|---|---|---|---|---|
+| **Agent** | `mvd.instrumentation.agent.threshold` | number (ms) | `50` | Minimum invocation duration to record (capped at `180000`, 3 minutes) |
+| **Agent** | `mvd.instrumentation.agent.maxEvents` | number | `100000` | Maximum number of recorded calls; slower calls beyond it are counted as dropped |
+| **Report** | `mvd.instrumentation.report.format` | `summary`, `json` | `summary` | Report output format (`summary` table and call tree, or JSON lines) |
+| **Report** | `mvd.instrumentation.report.output` | `stdout`, `stderr`, file path | `stdout` | Profiling report destination |
+| **Logging** | `mvd.instrumentation.log.level` | `OFF`, `ERROR`, `WARN`, `INFO`, `DEBUG` | `INFO` | Internal agent diagnostic log level |
+| **Logging** | `mvd.instrumentation.log.output` | `stderr`, `stdout` | `stderr` | Internal agent diagnostic log destination |
 
 ```bash
-java -Dmvd.instrumentation.threshold=100 -Dduration.format=json -Dduration.output=/tmp/duration.jsonl \
+java -Dmvd.instrumentation.agent.threshold=100 \
+     -Dmvd.instrumentation.report.format=json \
+     -Dmvd.instrumentation.report.output=/tmp/duration.jsonl \
+     -Dmvd.instrumentation.log.level=INFO \
      -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg -jar your-app.jar
 ```
 
-Each JSON line looks like `{"timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is the number of instrumented methods on the same thread that were still running when the call was made. If slow calls exceed `duration.maxEvents`, dropped stats are written to `stderr`. Property values like format and stdout/stderr are case-insensitive, and missing parent directories for file paths are created automatically. The report is not written if the JVM is killed with `kill -9`.
+Each JSON line looks like `{"timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is the number of instrumented methods on the same thread that were still running when the call was made. If slow calls exceed `mvd.instrumentation.agent.maxEvents`, dropped stats are logged as a warning to `stderr`. Property values like format and stdout/stderr are case-insensitive, and missing parent directories for file paths are created automatically. The report is not written if the JVM is killed with `kill -9`. Agent diagnostic logs (e.g. `[+12ms] [DEBUG] Transforming: ...`) default to `stderr` and are kept separate from profiler reports (`mvd.instrumentation.report.output`) so they never corrupt stdout/file reports.
 
 ## How to know which classes to include?
 Use a debugger, APM traces, or logs to identify potential hotspot packages and classes to instrument.

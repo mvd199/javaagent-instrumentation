@@ -14,7 +14,8 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 - [x] **6. Structured & Configurable Output Format (JSON / Sinks)** *(Medium Priority / UX)*
 - [ ] **7. Support for Modern Java Editions & Tooling** *(Long-term / Modernization)*
 - [ ] **8. Dynamic JVM Attachment (`agentmain`)** *(Long-term / Advanced)*
-- [ ] **9.** Cleanup console.out everywhere, we can use instead a minimal logger with levels. Example: https://github.com/mvd199/javaagent-instrumentation/blob/d3e30585aa98640a81f73495faa70b0de081f3d5/src/main/java/mvd/instrumentation/DurationTransformer.java#L57
+- [ ] **9. Fix Agent Loading & Classloader Isolation** *(Medium Priority / Architecture)*
+- [x] **10. Internal Agent Logging Facility & System Property Namespace Cleanup** *(Medium Priority / Usability)*
 
 ---
 
@@ -39,12 +40,12 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 * **Priority**: High (Usability)
 * **Problem**: The 50 millisecond threshold was hardcoded as `private static final int MINIMAL_INVOCATION_TIME_MILLIS = 50` in [`DurationAgent.java`](src/main/java/mvd/instrumentation/DurationAgent.java). Users could not tune the threshold for different performance profiling needs without recompiling.
 * **Implemented Solution**:
-  * Configured via system property: `-Dmvd.instrumentation.threshold=<ms>` (e.g. `-Dmvd.instrumentation.threshold=100`).
+  * Configured via system property: `-Dmvd.instrumentation.agent.threshold=<ms>` (e.g. `-Dmvd.instrumentation.agent.threshold=100`).
   * Integrated directly into [`ReportConfig.java`](src/main/java/mvd/instrumentation/ReportConfig.java), keeping `agentArgs` dedicated solely to the configuration file path without brittle custom delimiter parsing.
   * Defaults to `50` ms if not specified or invalid (non-numeric / negative), emitting a diagnostic warning to `System.err`.
   * Caps values exceeding `180_000` ms (3 minutes) to 180,000 ms with a warning to `System.err`.
 * **Acceptance Criteria**:
-  * Setting `-Dmvd.instrumentation.threshold` adjusts the minimum execution duration recorded by `Recorder`.
+  * Setting `-Dmvd.instrumentation.agent.threshold` adjusts the minimum execution duration recorded by `Recorder`.
   * Unit tests cover missing, valid, zero, negative, non-numeric, and capped thresholds.
 
 ---
@@ -147,6 +148,41 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 * **Acceptance Criteria**:
   * The agent JAR can be attached to a running JVM via `jcmd <pid> JVMTI.agent_load <jar>=classes.cfg` or the Attach API without restarting the process.
 
-### 9. Fix agent loading 
-Pre-existing, not from this PR: the DurationTransformer constructor sets a static callback, so creating a second transformer replaces the first one’s callback.
-Instrumented code also only works if its classloader can see the agent classes.
+---
+
+### 9. Fix Agent Loading & Classloader Isolation
+* **Status**: Open
+* **Priority**: Medium (Architecture / Reliability)
+* **Problem**: 
+  * The `DurationTransformer` constructor currently sets a static callback (`registerStartTimeFunction = registerFunction`), so instantiating a second transformer replaces the first one’s callback.
+  * Instrumented code only works if its classloader can see the agent classes. If classes are loaded in isolated child classloaders (e.g. plugins, OSGi, application containers), attempting to invoke `DurationTransformer.pushStartTime()` results in `NoClassDefFoundError` or `ClassNotFoundException`.
+* **Proposed Solution**:
+  * Replace static callback assignment with an instance-safe registry or lookup mechanism.
+  * Append agent runtime classes to the bootstrap classloader search path via `Instrumentation.appendToBootstrapClassLoaderSearch(jarFile)`.
+* **Acceptance Criteria**:
+  * Multiple transformer instances operate without clobbering each other's callbacks.
+  * Classes in isolated child classloaders execute instrumented methods without `NoClassDefFoundError`.
+
+---
+
+### 10. Internal Agent Logging Facility & System Property Namespace Cleanup
+* **Status**: Completed
+* **Priority**: Medium (Usability / Robustness)
+* **Problem**: 
+  * Diagnostic and error output was scattered across the codebase using `System.out.println`, `System.err.println`, and raw `e.printStackTrace()`.
+  * `DurationTransformer` unconditionally logged `Transforming: <className>` to `System.out` during classloading, polluting application output and interfering with stdout report redirection.
+  * System properties used the generic `duration.*` prefix (`duration.format`, `duration.output`, `duration.maxEvents`), risking global collisions.
+* **Implemented Solution**:
+  * Introduced `AgentLogger`: a lightweight, zero-dependency diagnostic logger supporting log levels (`OFF`, `ERROR`, `WARN`, `INFO`, `DEBUG`).
+  * Implemented monotonic elapsed time timestamping (`[+<ms>ms]`) using `System.nanoTime()` relative to agent initialization.
+  * Transformation logs downgraded to `DEBUG` level (silent by default under `INFO`).
+  * Diagnostic logs default to `System.err`, ensuring they never corrupt profiling reports written to `System.out` (e.g. JSON reports).
+  * System properties structured into clean functional namespaces under `mvd.instrumentation.*`:
+    * Core agent logic: `mvd.instrumentation.agent.threshold`, `mvd.instrumentation.agent.maxEvents`
+    * Report configuration: `mvd.instrumentation.report.format`, `mvd.instrumentation.report.output`
+    * Diagnostic logging: `mvd.instrumentation.log.level`, `mvd.instrumentation.log.output`
+* **Acceptance Criteria**:
+  * Bytecode transformation logging is suppressed by default (`INFO`) and enabled when `mvd.instrumentation.log.level=DEBUG`.
+  * Profiling reports on `stdout` are not corrupted by internal agent diagnostic messages.
+  * System properties are cleanly namespaced under `mvd.instrumentation.{agent,report,log}.*`.
+  * Unit tests cover all log levels, timestamp formatting, exception formatting, and property configuration.

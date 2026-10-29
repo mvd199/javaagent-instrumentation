@@ -41,7 +41,7 @@ help:
 	@echo "  make         - Run unit tests (default)"
 	@echo "  make test    - Run unit tests (pass ARGS='-Dtest=...' for specific test)"
 	@echo "  make package - Build the shaded agent JAR"
-	@echo "  make demo    - Build and run the interactive showcase demo (pass JAVA_OPTS='-Dduration.format=json')"
+	@echo "  make demo    - Build and run the interactive showcase demo (pass JAVA_OPTS='-Dmvd.instrumentation.report.format=json')"
 	@echo "  make clean   - Clean the build artifacts"
 	@echo "  make compile - Compile main source files"
 

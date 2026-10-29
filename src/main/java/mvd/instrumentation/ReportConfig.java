@@ -11,12 +11,19 @@ import java.nio.file.Paths;
 import java.util.Locale;
 import java.util.function.Function;
 
-/** Report settings, read from system properties: mvd.instrumentation.threshold, duration.format, duration.output, duration.maxEvents. */
+/**
+ * Report settings, read from system properties:
+ * - Core agent configs: mvd.instrumentation.agent.threshold, mvd.instrumentation.agent.maxEvents
+ * - Report configs: mvd.instrumentation.report.format, mvd.instrumentation.report.output
+ */
 final class ReportConfig {
-    static final String THRESHOLD_PROPERTY = "mvd.instrumentation.threshold";
-    static final String FORMAT_PROPERTY = "duration.format";
-    static final String OUTPUT_PROPERTY = "duration.output";
-    static final String MAX_EVENTS_PROPERTY = "duration.maxEvents";
+    static final String THRESHOLD_PROPERTY = "mvd.instrumentation.agent.threshold";
+    static final String MAX_EVENTS_PROPERTY = "mvd.instrumentation.agent.maxEvents";
+    static final String LEGACY_MAX_EVENTS_PROPERTY = "duration.maxEvents";
+    static final String FORMAT_PROPERTY = "mvd.instrumentation.report.format";
+    static final String LEGACY_FORMAT_PROPERTY = "duration.format";
+    static final String OUTPUT_PROPERTY = "mvd.instrumentation.report.output";
+    static final String LEGACY_OUTPUT_PROPERTY = "duration.output";
 
     static final long DEFAULT_THRESHOLD = 50L;
     static final long MAX_THRESHOLD = 180_000L;
@@ -43,13 +50,13 @@ final class ReportConfig {
     }
 
     static ReportConfig from(Function<String, String> properties) {
-        String format = valueOrDefault(properties.apply(FORMAT_PROPERTY), DEFAULT_FORMAT).toLowerCase(Locale.ROOT);
+        String format = valueOrDefault(getProperty(properties, FORMAT_PROPERTY, LEGACY_FORMAT_PROPERTY), DEFAULT_FORMAT).toLowerCase(Locale.ROOT);
         if (!"summary".equals(format) && !"json".equals(format)) {
             throw new IllegalArgumentException("Unknown " + FORMAT_PROPERTY + ": " + format + " (expected summary or json)");
         }
-        String output = valueOrDefault(properties.apply(OUTPUT_PROPERTY), DEFAULT_OUTPUT);
+        String output = valueOrDefault(getProperty(properties, OUTPUT_PROPERTY, LEGACY_OUTPUT_PROPERTY), DEFAULT_OUTPUT);
         int maxEvents = DEFAULT_MAX_EVENTS;
-        String rawMax = properties.apply(MAX_EVENTS_PROPERTY);
+        String rawMax = getProperty(properties, MAX_EVENTS_PROPERTY, LEGACY_MAX_EVENTS_PROPERTY);
         if (rawMax != null && !rawMax.trim().isEmpty()) {
             try {
                 maxEvents = Integer.parseInt(rawMax.trim());
@@ -66,11 +73,11 @@ final class ReportConfig {
             try {
                 long parsed = Long.parseLong(rawThreshold.trim());
                 if (parsed < 0) {
-                    System.err.println("DurationAgent: invalid " + THRESHOLD_PROPERTY + " '" + rawThreshold.trim()
+                    AgentLogger.warn("invalid " + THRESHOLD_PROPERTY + " '" + rawThreshold.trim()
                             + "'; falling back to default (" + DEFAULT_THRESHOLD + " ms).");
                     threshold = DEFAULT_THRESHOLD;
                 } else if (parsed > MAX_THRESHOLD) {
-                    System.err.println("DurationAgent: " + THRESHOLD_PROPERTY + " (" + parsed
+                    AgentLogger.warn(THRESHOLD_PROPERTY + " (" + parsed
                             + " ms) exceeds maximum limit of " + MAX_THRESHOLD + " ms (3 minutes); capping to "
                             + MAX_THRESHOLD + " ms.");
                     threshold = MAX_THRESHOLD;
@@ -78,7 +85,7 @@ final class ReportConfig {
                     threshold = parsed;
                 }
             } catch (NumberFormatException e) {
-                System.err.println("DurationAgent: invalid " + THRESHOLD_PROPERTY + " '" + rawThreshold.trim()
+                AgentLogger.warn("invalid " + THRESHOLD_PROPERTY + " '" + rawThreshold.trim()
                         + "'; falling back to default (" + DEFAULT_THRESHOLD + " ms).");
                 threshold = DEFAULT_THRESHOLD;
             }
@@ -117,5 +124,13 @@ final class ReportConfig {
 
     private static String valueOrDefault(String value, String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private static String getProperty(Function<String, String> properties, String key, String legacyKey) {
+        String val = properties.apply(key);
+        if (val != null) {
+            return val;
+        }
+        return legacyKey != null ? properties.apply(legacyKey) : null;
     }
 }
