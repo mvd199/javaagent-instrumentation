@@ -10,12 +10,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class DurationAgent {
-    private static final int MINIMAL_INVOCATION_TIME_MILLIS = 50;
+    public static final int MINIMAL_INVOCATION_TIME_MILLIS = (int) ReportConfig.DEFAULT_THRESHOLD;
 
     public static void premain(String agentArgs, Instrumentation inst) {
         Set<String> whiteList = createWhitelist(agentArgs);
         ReportConfig config = ReportConfig.fromSystemProperties();
-        Recorder recorder = new Recorder(MINIMAL_INVOCATION_TIME_MILLIS, config.maxEvents, DurationTransformer::currentDepth);
+        Recorder recorder = new Recorder(config.threshold, config.maxEvents, DurationTransformer::currentDepth);
         inst.addTransformer(new DurationTransformer(whiteList::contains, recorder::record));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> writeReport(recorder, config), "duration-agent-report"));
     }

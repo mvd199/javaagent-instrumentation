@@ -110,17 +110,18 @@ Add the `-javaagent` flag to your JVM startup options:
 java -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg -jar your-app.jar
 ```
 
-### 3. Choose the Report (optional)
+### 3. Configure Threshold & Report (optional)
 The report is buffered in memory and written once, when the JVM exits. Configure it with system properties:
 
 | Property | Values | Default |
 |---|---|---|
+| `mvd.instrumentation.threshold` | minimum invocation duration in milliseconds to record (capped at `180000`, 3 minutes) | `50` |
 | `duration.format` | `summary` (tables and call tree), `json` (one JSON object per line) | `summary` |
 | `duration.output` | `stdout`, `stderr` or a file path | `stdout` |
 | `duration.maxEvents` | maximum number of recorded calls; slower calls beyond it are counted as dropped | `100000` |
 
 ```bash
-java -Dduration.format=json -Dduration.output=/tmp/duration.jsonl \
+java -Dmvd.instrumentation.threshold=100 -Dduration.format=json -Dduration.output=/tmp/duration.jsonl \
      -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg -jar your-app.jar
 ```
 

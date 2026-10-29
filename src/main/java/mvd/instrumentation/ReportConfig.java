@@ -11,25 +11,30 @@ import java.nio.file.Paths;
 import java.util.Locale;
 import java.util.function.Function;
 
-/** Report settings, read from system properties: duration.format, duration.output, duration.maxEvents. */
+/** Report settings, read from system properties: mvd.instrumentation.threshold, duration.format, duration.output, duration.maxEvents. */
 final class ReportConfig {
+    static final String THRESHOLD_PROPERTY = "mvd.instrumentation.threshold";
     static final String FORMAT_PROPERTY = "duration.format";
     static final String OUTPUT_PROPERTY = "duration.output";
     static final String MAX_EVENTS_PROPERTY = "duration.maxEvents";
 
+    static final long DEFAULT_THRESHOLD = 50L;
+    static final long MAX_THRESHOLD = 180_000L;
     static final String DEFAULT_FORMAT = "summary";
     static final String DEFAULT_OUTPUT = "stdout";
     static final int DEFAULT_MAX_EVENTS = 100_000;
 
+    final long threshold;
     final String format;
     final String output;
     final int maxEvents;
     final Reporter reporter;
 
-    private ReportConfig(String format, String output, int maxEvents) {
+    private ReportConfig(String format, String output, int maxEvents, long threshold) {
         this.format = format;
         this.output = output;
         this.maxEvents = maxEvents;
+        this.threshold = threshold;
         this.reporter = "json".equals(format) ? new JsonReporter() : new SummaryReporter();
     }
 
@@ -55,7 +60,30 @@ final class ReportConfig {
                 throw new IllegalArgumentException(MAX_EVENTS_PROPERTY + " must be a positive integer: " + rawMax);
             }
         }
-        return new ReportConfig(format, output, maxEvents);
+        long threshold = DEFAULT_THRESHOLD;
+        String rawThreshold = properties.apply(THRESHOLD_PROPERTY);
+        if (rawThreshold != null && !rawThreshold.trim().isEmpty()) {
+            try {
+                long parsed = Long.parseLong(rawThreshold.trim());
+                if (parsed < 0) {
+                    System.err.println("DurationAgent: invalid " + THRESHOLD_PROPERTY + " '" + rawThreshold.trim()
+                            + "'; falling back to default (" + DEFAULT_THRESHOLD + " ms).");
+                    threshold = DEFAULT_THRESHOLD;
+                } else if (parsed > MAX_THRESHOLD) {
+                    System.err.println("DurationAgent: " + THRESHOLD_PROPERTY + " (" + parsed
+                            + " ms) exceeds maximum limit of " + MAX_THRESHOLD + " ms (3 minutes); capping to "
+                            + MAX_THRESHOLD + " ms.");
+                    threshold = MAX_THRESHOLD;
+                } else {
+                    threshold = parsed;
+                }
+            } catch (NumberFormatException e) {
+                System.err.println("DurationAgent: invalid " + THRESHOLD_PROPERTY + " '" + rawThreshold.trim()
+                        + "'; falling back to default (" + DEFAULT_THRESHOLD + " ms).");
+                threshold = DEFAULT_THRESHOLD;
+            }
+        }
+        return new ReportConfig(format, output, maxEvents, threshold);
     }
 
     Reporter reporter() {
