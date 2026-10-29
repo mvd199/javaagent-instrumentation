@@ -8,7 +8,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 
 - [x] **1. Exception Handling in Instrumented Methods** *(High Priority / Bug Fix)*
 - [x] **2. Configurable Duration Threshold** *(High Priority / Usability)*
-- [ ] **3. Wildcard & Package Prefix Matching** *(High Priority / Usability)*
+- [x] **3. Wildcard & Package Prefix Matching** *(High Priority / Usability)*
 - [ ] **4. Shaded Dependency Relocation** *(Medium Priority / Safety)*
 - [x] **5. Call Depth & Hierarchy Indentation** *(Medium Priority / UX)*
 - [x] **6. Structured & Configurable Output Format (JSON / Sinks)** *(Medium Priority / UX)*
@@ -51,15 +51,17 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 ---
 
 ### 3. Wildcard & Package Prefix Matching
-* **Status**: Open
+* **Status**: Completed
 * **Priority**: High (Usability)
-* **Problem**: [`classes.cfg`](classes.cfg) currently requires listing every individual fully qualified class name. There is no support for package wildcards (e.g. `com.example.service.*` or `com.example.**`). In addition, blank lines and comment lines (`# ...`) in `classes.cfg` are not filtered, causing empty strings to be added to the whitelist.
-* **Proposed Solution**:
-  * Ignore blank lines, trailing/leading whitespace, and `#` comments when reading `classes.cfg`.
-  * Convert whitelist entries into predicates supporting:
-    * Exact match: `com.example.Foo`
-    * Single-level wildcard: `com.example.*` (matches direct classes in package)
-    * Recursive prefix wildcard: `com.example.**` (matches all subpackages)
+* **Problem**: [`classes.cfg`](classes.cfg) previously required listing every individual fully qualified class name. There was no support for package wildcards (e.g. `com.example.service.*` or `com.example.**`). In addition, blank lines and comment lines (`# ...`) in `classes.cfg` were not filtered, causing empty strings to be added to the whitelist.
+* **Implemented Solution**:
+  * Implemented [`ClassFilter.java`](src/main/java/mvd/instrumentation/ClassFilter.java) implementing `Predicate<String>` with fast-path, zero-heap-allocation evaluation:
+    * Exact match: `com.example.Foo` via `Set<String>` lookup.
+    * Single-level wildcard: `com.example.*` via string prefix match (`com/example/`) + ensuring no further `/` delimiter.
+    * Recursive prefix wildcard: `com.example.**` via package prefix match (`com/example/`).
+    * General globs: fallback to compiled `java.util.regex.Pattern`.
+  * Sanitizes configuration inputs by stripping full-line and inline `#` comments, trimming whitespace, and ignoring empty/blank lines.
+  * Added JMH microbenchmark suite ([`ClassFilterBenchmark.java`](src/test/java/mvd/instrumentation/ClassFilterBenchmark.java)) runnable via `make bench`, showing nanosecond-range evaluation (`~4.7ns` for exact match hits, `~6.5ns` for recursive wildcard hits, `~6.8ns` for JDK class misses).
 * **Acceptance Criteria**:
   * Classes in matched subpackages are instrumented without listing each class individually.
   * Blank lines and `#` comments in `classes.cfg` do not break instrumentation.

@@ -53,6 +53,39 @@ public class DurationAgentTest {
     }
 
     @Test
+    public void whitelistIgnoresCommentsAndBlankLines() throws Exception {
+        File config = folder.newFile("classes.cfg");
+        Files.write(config.toPath(), Arrays.asList(
+                "# Header comment",
+                "  ",
+                "com.example.Foo",
+                "   # indented comment",
+                "com.example.sub.Bar # inline comment",
+                ""
+        ));
+
+        Set<String> whitelist = DurationAgent.createWhitelist(config.getPath());
+
+        assertEquals(new HashSet<>(Arrays.asList("com/example/Foo", "com/example/sub/Bar")), whitelist);
+    }
+
+    @Test
+    public void createClassFilterBuildsFunctionalFilterFromFile() throws Exception {
+        File config = folder.newFile("classes.cfg");
+        Files.write(config.toPath(), Arrays.asList(
+                "# Whitelist configuration",
+                "com.example.service.*",
+                "com.example.repo.**"
+        ));
+
+        ClassFilter filter = DurationAgent.createClassFilter(config.getPath());
+
+        assertTrue(filter.test("com/example/service/OrderService"));
+        assertTrue(filter.test("com/example/repo/jpa/UserRepo"));
+        assertEquals(false, filter.test("com/other/Foo"));
+    }
+
+    @Test
     public void writeReportWritesConfiguredFormatToConfiguredFile() throws Exception {
         File output = new File(folder.getRoot(), "report.jsonl");
         ReportConfig config = ReportConfig.from(property -> {

@@ -84,6 +84,11 @@ Notice:
   ```
   The packaged JAR will be created at: `target/java-instrumentation-1.0-SNAPSHOT.jar`
 
+* **Run microbenchmarks (JMH)**:
+  ```bash
+  make bench
+  ```
+
 * **Clean build artifacts**:
   ```bash
   make clean
@@ -94,11 +99,22 @@ Notice:
 ## Usage in Your Application
 
 ### 1. Configure the Whitelist ([`classes.cfg`](https://github.com/mvd199/javaagent-instrumentation/blob/master/classes.cfg))
-List the fully qualified names of the classes you want to instrument, one per line. For example:
+List the classes or package patterns you want to instrument, one per line. Blank lines, leading/trailing whitespace, and `#` comments are ignored.
+
+Supports:
+- **Exact class**: `com.mycompany.service.OrderService`
+- **Single-level wildcard**: `com.mycompany.service.*` (matches direct classes in package)
+- **Recursive wildcard**: `com.mycompany.repository.**` (matches package and all subpackages)
 
 ```text
+# Exact service class
 com.mycompany.service.OrderService
-com.mycompany.repository.UserRepository
+
+# All controllers directly in the web package
+com.mycompany.web.*
+
+# All repository classes and subpackages
+com.mycompany.repository.**
 ```
 
 The bundled `demo.cfg` (used by `make demo`) whitelists only `mvd.instrumentation.demo.DemoService`.
