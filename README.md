@@ -106,6 +106,8 @@ Supports:
 - **Single-level wildcard**: `com.mycompany.service.*` (matches direct classes in package)
 - **Recursive wildcard**: `com.mycompany.repository.**` (matches package and all subpackages)
 
+JDK classes (`java.*`, `javax.*`, `jdk.*`, `sun.*`, `com.sun.*`), javassist and the agent's own classes are never instrumented, because instrumenting them can abort JVM startup or stop the report from being written. A pattern that covers them logs a warning, and a bare `**` is rejected at startup.
+
 ```text
 # Exact service class
 com.mycompany.service.OrderService
@@ -131,7 +133,7 @@ The report is buffered in memory and written once, when the JVM exits. Configure
 
 | Category | Property | Values | Default | Description |
 |---|---|---|---|---|
-| **Agent** | `mvd.instrumentation.agent.threshold` | number (ms) | `50` | Minimum invocation duration to record (capped at `180000`, 3 minutes) |
+| **Agent** | `mvd.instrumentation.agent.threshold` | number (ms) | `50` | Calls that take longer than this are recorded; values above `180000` (3 minutes) are capped with a warning, so a too-high value cannot silently disable recording |
 | **Agent** | `mvd.instrumentation.agent.maxEvents` | number | `100000` | Maximum number of recorded calls; slower calls beyond it are counted as dropped |
 | **Report** | `mvd.instrumentation.report.format` | `summary`, `json` | `summary` | Report output format (`summary` table and call tree, or JSON lines) |
 | **Report** | `mvd.instrumentation.report.output` | `stdout`, `stderr`, file path | `stdout` | Profiling report destination |
@@ -146,7 +148,19 @@ java -Dmvd.instrumentation.agent.threshold=100 \
      -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg -jar your-app.jar
 ```
 
-Each JSON line looks like `{"timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is the number of instrumented methods on the same thread that were still running when the call was made. If slow calls exceed `mvd.instrumentation.agent.maxEvents`, dropped stats are logged as a warning to `stderr`. Property values like format and stdout/stderr are case-insensitive, and missing parent directories for file paths are created automatically. The report is not written if the JVM is killed with `kill -9`. Agent diagnostic logs (e.g. `[+12ms] [DEBUG] Transforming: ...`) default to `stderr` and are kept separate from profiler reports (`mvd.instrumentation.report.output`) so they never corrupt stdout/file reports.
+Each JSON line looks like `{"timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is the number of instrumented methods on the same thread that were still running when the call was made. If slow calls exceed `mvd.instrumentation.agent.maxEvents`, the number of dropped calls appears in the `summary` report header, or is logged as a warning to `stderr` for `json`. Property values like format and stdout/stderr are case-insensitive, and missing parent directories for file paths are created automatically. The report is not written if the JVM is killed with `kill -9`. Agent diagnostic logs (e.g. `[+12ms] [DEBUG] Transforming: ...`) default to `stderr` and are kept separate from profiler reports (`mvd.instrumentation.report.output`) so they don't mix with the report unless you set `mvd.instrumentation.log.output=stdout` while the report also goes to `stdout`. An invalid value (unknown format, non-numeric or negative number) stops the JVM at startup with an error naming the property.
+
+#### Upgrading from `duration.*` properties
+All properties moved under the `mvd.instrumentation.` prefix. The old names are no longer read: if you still pass them, they are ignored and the defaults apply, so update your startup flags.
+
+| Old property | New property |
+|---|---|
+| `duration.format` | `mvd.instrumentation.report.format` |
+| `duration.output` | `mvd.instrumentation.report.output` |
+| `duration.maxEvents` | `mvd.instrumentation.agent.maxEvents` |
+| *(hardcoded 50 ms)* | `mvd.instrumentation.agent.threshold` |
+
+The `Transforming: <class>` lines the agent used to print to `stdout` are now `DEBUG` logs on `stderr`; set `-Dmvd.instrumentation.log.level=DEBUG` to see them.
 
 ## How to know which classes to include?
 Use a debugger, APM traces, or logs to identify potential hotspot packages and classes to instrument.

@@ -9,9 +9,10 @@ import java.util.function.Function;
  *
  * <p>Diagnostic logs are kept separate from profiler report output to prevent corrupting
  * structured output formats (e.g. JSON lines on stdout). All diagnostic logs default to
- * {@code System.err} with an elapsed time offset from agent startup.
+ * {@code System.err}, stamped with the time elapsed since this class was initialized (in practice,
+ * shortly after agent startup).
  */
-public final class AgentLogger {
+final class AgentLogger {
     public enum Level {
         OFF(0),
         ERROR(1),

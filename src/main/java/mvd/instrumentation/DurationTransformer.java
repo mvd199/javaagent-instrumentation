@@ -28,7 +28,8 @@ public class DurationTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className,
                             Class<?> classBeingRedefined, ProtectionDomain protectionDomain,
                             byte[] classfileBuffer) throws IllegalClassFormatException {
-        if (!allowTransformationPredicate.test(className)) {
+        // Bootstrap classes cannot see the agent classes that the instrumentation calls.
+        if (loader == null || !allowTransformationPredicate.test(className)) {
             return null;
         }
 

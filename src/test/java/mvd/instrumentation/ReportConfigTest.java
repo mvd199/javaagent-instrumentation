@@ -43,57 +43,43 @@ public class ReportConfigTest {
     }
 
     @Test
+    public void acceptsThresholdAtMaxLimit() {
+        ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "180000");
+
+        assertEquals(ReportConfig.MAX_THRESHOLD, config.threshold);
+    }
+
+    @Test
     public void capsThresholdExceedingMaxLimitAndLogsWarning() {
-        java.io.PrintStream originalErr = System.err;
         java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
-        System.setErr(new java.io.PrintStream(errBytes));
+        AgentLogger.setTargetStream(new java.io.PrintStream(errBytes));
         try {
-            ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "200000");
+            ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "86400000");
 
             assertEquals(ReportConfig.MAX_THRESHOLD, config.threshold);
-            String err = errBytes.toString();
-            assertTrue(err, err.contains("DurationAgent:"));
-            assertTrue(err, err.contains("[WARN]"));
-            assertTrue(err, err.contains(ReportConfig.THRESHOLD_PROPERTY + " (200000 ms) exceeds maximum limit of 180000 ms (3 minutes); capping to 180000 ms."));
         } finally {
-            System.setErr(originalErr);
+            AgentLogger.reset();
         }
+        String err = errBytes.toString();
+        assertTrue(err, err.contains("[WARN] " + ReportConfig.THRESHOLD_PROPERTY
+                + " (86400000 ms) exceeds maximum limit of 180000 ms (3 minutes); capping to 180000 ms."));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsNegativeThreshold() {
+        config(ReportConfig.THRESHOLD_PROPERTY, "-5");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsNonNumericThreshold() {
+        config(ReportConfig.THRESHOLD_PROPERTY, "invalid_num");
     }
 
     @Test
-    public void fallsBackToDefaultOnNegativeThresholdAndLogsWarning() {
-        java.io.PrintStream originalErr = System.err;
-        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
-        System.setErr(new java.io.PrintStream(errBytes));
-        try {
-            ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "-5");
+    public void ignoresRemovedDurationProperties() {
+        ReportConfig config = ReportConfig.from(property -> property.startsWith("duration.") ? "json" : null);
 
-            assertEquals(ReportConfig.DEFAULT_THRESHOLD, config.threshold);
-            String err = errBytes.toString();
-            assertTrue(err, err.contains("DurationAgent:"));
-            assertTrue(err, err.contains("[WARN]"));
-            assertTrue(err, err.contains("invalid " + ReportConfig.THRESHOLD_PROPERTY + " '-5'; falling back to default (50 ms)."));
-        } finally {
-            System.setErr(originalErr);
-        }
-    }
-
-    @Test
-    public void fallsBackToDefaultOnNonNumericThresholdAndLogsWarning() {
-        java.io.PrintStream originalErr = System.err;
-        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
-        System.setErr(new java.io.PrintStream(errBytes));
-        try {
-            ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "invalid_num");
-
-            assertEquals(ReportConfig.DEFAULT_THRESHOLD, config.threshold);
-            String err = errBytes.toString();
-            assertTrue(err, err.contains("DurationAgent:"));
-            assertTrue(err, err.contains("[WARN]"));
-            assertTrue(err, err.contains("invalid " + ReportConfig.THRESHOLD_PROPERTY + " 'invalid_num'; falling back to default (50 ms)."));
-        } finally {
-            System.setErr(originalErr);
-        }
+        assertEquals("summary", config.format);
     }
 
     @Test

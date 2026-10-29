@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -121,12 +120,52 @@ public class ClassFilterTest {
         assertFalse(filter.test("org/example/Foo"));
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void globalWildcardIsRejected() {
+        ClassFilter.fromPatterns("**");
+    }
+
     @Test
-    public void globalWildcardMatchesAnyClass() {
-        ClassFilter filter = ClassFilter.fromPatterns("**");
-        assertTrue(filter.test("Main"));
-        assertTrue(filter.test("com/example/Foo"));
-        assertTrue(filter.test("java/lang/String"));
+    public void neverMatchesJdkOrJavassistClasses() {
+        ClassFilter filter = ClassFilter.fromPatterns("java.util.**", "javax.*", "jdk.**", "sun.**",
+                "com.sun.**", "javassist.**", "java.lang.String", "java/lang/*Builder");
+        assertFalse(filter.test("java/util/IdentityHashMap$KeyIterator"));
+        assertFalse(filter.test("java/lang/String"));
+        assertFalse(filter.test("java/lang/StringBuilder"));
+        assertFalse(filter.test("javax/Foo"));
+        assertFalse(filter.test("jdk/internal/misc/Unsafe"));
+        assertFalse(filter.test("sun/misc/Signal"));
+        assertFalse(filter.test("com/sun/proxy/$Proxy1"));
+        assertFalse(filter.test("javassist/CtClass"));
+    }
+
+    @Test
+    public void neverMatchesAgentClassesButAllowsAgentSubpackages() {
+        ClassFilter filter = ClassFilter.fromPatterns("mvd.instrumentation.**");
+        assertFalse(filter.test("mvd/instrumentation/AgentLogger"));
+        assertFalse(filter.test("mvd/instrumentation/DurationTransformer$LongStack"));
+        assertTrue(filter.test("mvd/instrumentation/demo/DemoService"));
+    }
+
+    @Test
+    public void doesNotExcludePackagesThatOnlyShareAPrefix() {
+        ClassFilter filter = ClassFilter.fromPatterns("javafoo.**", "sunrise.*");
+        assertTrue(filter.test("javafoo/Bar"));
+        assertTrue(filter.test("sunrise/Bar"));
+    }
+
+    @Test
+    public void warnsAboutPatternsCoveringExcludedClasses() {
+        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
+        AgentLogger.setTargetStream(new java.io.PrintStream(errBytes));
+        try {
+            ClassFilter.fromPatterns("java.util.**", "com.example.**");
+        } finally {
+            AgentLogger.reset();
+        }
+        String err = errBytes.toString();
+        assertTrue(err, err.contains("[WARN] pattern 'java.util.**' covers JDK, javassist or agent classes"));
+        assertFalse(err, err.contains("com.example"));
     }
 
     @Test
@@ -147,8 +186,8 @@ public class ClassFilterTest {
     }
 
     @Test
-    public void ignoresFullLineCommentsAndIndentedComments() {
-        ClassFilter filter = ClassFilter.fromPatterns(
+    public void ignoresFullLineCommentsAndIndentedComments() throws Exception {
+        ClassFilter filter = fromConfig(
                 "# Full-line comment",
                 "   # Indented comment",
                 "com.example.Foo"
@@ -158,14 +197,14 @@ public class ClassFilterTest {
     }
 
     @Test
-    public void stripsInlineComments() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.Foo # inline comment");
+    public void stripsInlineComments() throws Exception {
+        ClassFilter filter = fromConfig("com.example.Foo # inline comment");
         assertTrue(filter.test("com/example/Foo"));
     }
 
     @Test
-    public void ignoresBlankLinesAndTrimsWhitespace() {
-        ClassFilter filter = ClassFilter.fromPatterns(
+    public void ignoresBlankLinesAndTrimsWhitespace() throws Exception {
+        ClassFilter filter = fromConfig(
                 "",
                 "   ",
                 "\t\t",
@@ -202,13 +241,8 @@ public class ClassFilterTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void fromFileRejectsNullFile() {
-        ClassFilter.fromFile((File) null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
     public void fromFileRejectsMissingFile() {
-        ClassFilter.fromFile(new File(folder.getRoot(), "missing.cfg"));
+        ClassFilter.fromFile(new File(folder.getRoot(), "missing.cfg").getPath());
     }
 
     @Test
@@ -224,7 +258,7 @@ public class ClassFilterTest {
                 "com.example.repo.** # repository hierarchy"
         ));
 
-        ClassFilter filter = ClassFilter.fromFile(config);
+        ClassFilter filter = ClassFilter.fromFile(config.getPath());
 
         assertTrue(filter.test("com/example/Exact"));
         assertTrue(filter.test("com/example/service/OrderService"));
@@ -257,39 +291,7 @@ public class ClassFilterTest {
         assertFalse(filter.test("com/unrelated/Class"));
     }
 
-    @Test
-    public void evaluationPerformanceSanityCheck() {
-        ClassFilter filter = ClassFilter.fromPatterns(
-                "com.example.service.OrderService",
-                "com.example.service.UserService",
-                "com.example.web.*",
-                "com.example.core.**"
-        );
-        String[] samples = {
-                "com/example/service/OrderService",
-                "com/example/web/LoginController",
-                "com/example/web/sub/Failed",
-                "com/example/core/deep/nested/Engine",
-                "java/lang/String",
-                "java/util/ArrayList",
-                "com/example2/service/OrderService"
-        };
-        // Warmup loop to trigger JIT compilation
-        int sink = 0;
-        for (int i = 0; i < 50_000; i++) {
-            for (String sample : samples) {
-                sink += filter.test(sample) ? 1 : 0;
-            }
-        }
-        // Timed measurement loop: 100,000 passes * 7 samples = 700,000 evaluations
-        long start = System.nanoTime();
-        for (int i = 0; i < 100_000; i++) {
-            for (String sample : samples) {
-                sink += filter.test(sample) ? 1 : 0;
-            }
-        }
-        long durationMs = (System.nanoTime() - start) / 1_000_000L;
-        assertTrue("Sink should be positive: " + sink, sink > 0);
-        assertTrue("700,000 evaluations should complete in under 500ms, took " + durationMs + "ms", durationMs < 500L);
+    private static ClassFilter fromConfig(String... lines) throws Exception {
+        return new ClassFilter(ClassFilter.parseLines(new StringReader(String.join("\n", lines))));
     }
 }

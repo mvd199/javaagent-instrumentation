@@ -16,6 +16,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 - [ ] **8. Dynamic JVM Attachment (`agentmain`)** *(Long-term / Advanced)*
 - [ ] **9. Fix Agent Loading & Classloader Isolation** *(Medium Priority / Architecture)*
 - [x] **10. Internal Agent Logging Facility & System Property Namespace Cleanup** *(Medium Priority / Usability)*
+- [ ] **11. Agent Overhead Benchmarks & Performance Regression Gates** *(High Priority / Performance)*
 
 ---
 
@@ -42,11 +43,11 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 * **Implemented Solution**:
   * Configured via system property: `-Dmvd.instrumentation.agent.threshold=<ms>` (e.g. `-Dmvd.instrumentation.agent.threshold=100`).
   * Integrated directly into [`ReportConfig.java`](src/main/java/mvd/instrumentation/ReportConfig.java), keeping `agentArgs` dedicated solely to the configuration file path without brittle custom delimiter parsing.
-  * Defaults to `50` ms if not specified or invalid (non-numeric / negative), emitting a diagnostic warning to `System.err`.
-  * Caps values exceeding `180_000` ms (3 minutes) to 180,000 ms with a warning to `System.err`.
+  * Defaults to `50` ms if not specified. Non-numeric or negative values stop the agent at startup with an `IllegalArgumentException`, like the other properties.
+  * Caps values exceeding `180_000` ms (3 minutes) to 180,000 ms with a warning, so an accidental huge value (e.g. a day) cannot silently disable recording.
 * **Acceptance Criteria**:
   * Setting `-Dmvd.instrumentation.agent.threshold` adjusts the minimum execution duration recorded by `Recorder`.
-  * Unit tests cover missing, valid, zero, negative, non-numeric, and capped thresholds.
+  * Unit tests cover missing, valid, zero, capped, negative, and non-numeric thresholds.
 
 ---
 
@@ -61,6 +62,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
     * Recursive prefix wildcard: `com.example.**` via package prefix match (`com/example/`).
     * General globs: fallback to compiled `java.util.regex.Pattern`.
   * Sanitizes configuration inputs by stripping full-line and inline `#` comments, trimming whitespace, and ignoring empty/blank lines.
+  * Never matches JDK (`java/`, `javax/`, `jdk/`, `sun/`, `com/sun/`), javassist or agent classes, and rejects a bare `**`; a pattern covering excluded classes logs a warning. `DurationTransformer` also skips bootstrap-loaded classes. Instrumenting those classes aborted JVM startup (`**`) or silently lost the report (`java.util.**`), because they cannot see the agent classes the instrumentation calls.
   * Added JMH microbenchmark suite ([`ClassFilterBenchmark.java`](src/test/java/mvd/instrumentation/ClassFilterBenchmark.java)) runnable via `make bench`, showing nanosecond-range evaluation (`~4.7ns` for exact match hits, `~6.5ns` for recursive wildcard hits, `~6.8ns` for JDK class misses).
 * **Acceptance Criteria**:
   * Classes in matched subpackages are instrumented without listing each class individually.
@@ -178,13 +180,37 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
   * Introduced `AgentLogger`: a lightweight, zero-dependency diagnostic logger supporting log levels (`OFF`, `ERROR`, `WARN`, `INFO`, `DEBUG`).
   * Implemented monotonic elapsed time timestamping (`[+<ms>ms]`) using `System.nanoTime()` relative to agent initialization.
   * Transformation logs downgraded to `DEBUG` level (silent by default under `INFO`).
-  * Diagnostic logs default to `System.err`, ensuring they never corrupt profiling reports written to `System.out` (e.g. JSON reports).
+  * Diagnostic logs default to `System.err`, keeping them out of profiling reports written to `System.out` (e.g. JSON reports).
   * System properties structured into clean functional namespaces under `mvd.instrumentation.*`:
     * Core agent logic: `mvd.instrumentation.agent.threshold`, `mvd.instrumentation.agent.maxEvents`
     * Report configuration: `mvd.instrumentation.report.format`, `mvd.instrumentation.report.output`
     * Diagnostic logging: `mvd.instrumentation.log.level`, `mvd.instrumentation.log.output`
+  * The old `duration.*` names are no longer read; the README has a migration table.
 * **Acceptance Criteria**:
   * Bytecode transformation logging is suppressed by default (`INFO`) and enabled when `mvd.instrumentation.log.level=DEBUG`.
   * Profiling reports on `stdout` are not corrupted by internal agent diagnostic messages.
   * System properties are cleanly namespaced under `mvd.instrumentation.{agent,report,log}.*`.
   * Unit tests cover all log levels, timestamp formatting, exception formatting, and property configuration.
+
+---
+
+### 11. Agent Overhead Benchmarks & Performance Regression Gates
+* **Status**: Open
+* **Priority**: High (Performance)
+* **Problem**:
+  * The only benchmark ([`ClassFilterBenchmark.java`](src/test/java/mvd/instrumentation/ClassFilterBenchmark.java)) measures `ClassFilter.test`, which runs once per class load and is not on the critical path. The cost users actually pay runs on every call to every instrumented method: `pushStartTime()` (`ThreadLocal` lookup, `System.nanoTime()`, stack push), `popAndRegisterStartTime()`, and the fast rejection of calls under the threshold in `Recorder.record`. The injected `try/finally` also grows each instrumented method, which can stop the JIT from inlining it.
+  * `make bench` runs JMH through `exec:java` with `@Fork(0)`. JMH warns that non-forked results are only good for debugging, and this setup cannot attach the agent (`-javaagent`) to the benchmark JVM. The figures quoted in item 3 come from these runs.
+  * Nothing detects performance regressions: there is no allocation check, no limit on injected bytecode size, and no benchmark in CI.
+* **Proposed Solution**:
+  * **Deterministic gates** (stable, can fail the build on every PR):
+    * Assert that the under-threshold path allocates 0 bytes per call, via JMH `-prof gc` (`gc.alloc.rate.norm`) or a JUnit test around `ThreadMXBean.getThreadAllocatedBytes()` (it counts bytes, not time, so it is not affected by machine load).
+    * Cap the bytecode the transformer adds per method (instrumented minus original size), to protect JIT inlining.
+  * **Overhead-per-call JMH benchmark**: the same small method called without the agent and with it, attached via `@Fork(jvmArgsAppend = "-javaagent:...")`, so the real javassist-generated code is measured. Cover the under-threshold path, the recorded path, and nested calls.
+  * **Proper JMH runs**: `make bench` runs JMH's own `Main` with the test classpath (or a benchmark JAR) and forks by default (`@Fork(2)` or more); results can be written as JSON (`-rf json`). Benchmarks stay runnable on demand.
+  * **CI timing check, master vs PR on the same runner**: one job builds both master and the PR and runs the same benchmarks back to back, failing only when the slowdown exceeds a set percentage (e.g. 10–15%) and is larger than JMH's error range. Comparing against stored numbers from other machines is avoided, because shared GitHub runners vary by ~5–10%. Runs on PRs touching `src/main` and nightly on master. Optionally publish trends with `benchmark-action/github-action-benchmark`; tighter thresholds would need a dedicated self-hosted runner.
+* **Acceptance Criteria**:
+  * A test fails if the under-threshold path of an instrumented call allocates.
+  * A test fails if the bytecode injected per method grows beyond the agreed limit.
+  * `make bench` runs forked JMH benchmarks that report per-call overhead with and without the agent.
+  * A CI workflow compares PR and master benchmark results on the same runner and fails on a regression above the threshold.
+  * `ClassFilterBenchmark` stays available on demand but does not gate CI.

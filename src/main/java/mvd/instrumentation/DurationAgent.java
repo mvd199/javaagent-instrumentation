@@ -1,14 +1,8 @@
 package mvd.instrumentation;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.UncheckedIOException;
 import java.lang.instrument.Instrumentation;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 public class DurationAgent {
 
@@ -57,26 +51,5 @@ public class DurationAgent {
         reporter.write(report, out);
         out.flush();
         return !out.checkError();
-    }
-
-    static Set<String> createWhitelist(String agentArgs) {
-        if (agentArgs == null) {
-            throw new IllegalArgumentException("Agent args can't be null.");
-        }
-        if ("".equals(agentArgs)) {
-            throw new IllegalArgumentException("Agent args can't be empty.");
-        }
-        File configuration = new File(agentArgs);
-        if (!configuration.exists()) {
-            throw new IllegalArgumentException("Configuration file not found: " + agentArgs);
-        }
-
-        try (BufferedReader reader = new BufferedReader(new FileReader(configuration))) {
-            return ClassFilter.parseLines(reader).stream()
-                    .map(s -> s.replace('.', '/'))
-                    .collect(Collectors.toSet());
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to read configuration.", e);
-        }
     }
 }

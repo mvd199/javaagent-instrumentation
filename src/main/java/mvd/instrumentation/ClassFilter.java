@@ -1,11 +1,13 @@
 package mvd.instrumentation;
 
 import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -17,7 +19,8 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
- * Filter that decides whether a given class should be instrumented.
+ * Decides whether a class should be instrumented. Class names are tested in JVM internal form
+ * ({@code com/example/Foo}); patterns may use dots or slashes.
  * <p>
  * Supports:
  * <ul>
@@ -25,63 +28,59 @@ import java.util.regex.Pattern;
  *   <li>Single-level package wildcard: {@code com.example.*} (matches direct classes in package)</li>
  *   <li>Recursive prefix wildcard: {@code com.example.**} (matches package and all subpackages)</li>
  *   <li>Default package single-level: {@code *}</li>
- *   <li>Global match: {@code **}</li>
- *   <li>Arbitrary globs: e.g. {@code com.example.*Service}</li>
- *   <li>Blank lines, whitespace trimming, and full/inline comments ({@code # ...})</li>
+ *   <li>Other globs: e.g. {@code com.example.*Service}</li>
  * </ul>
+ * JDK classes, javassist and the agent's own classes are never matched: the instrumentation calls into
+ * agent classes that those classes cannot see, which aborts JVM startup or kills the shutdown hook that
+ * writes the report. The bare {@code **} pattern is rejected for the same reason.
  */
-public final class ClassFilter implements Predicate<String> {
-    private final boolean matchAll;
+final class ClassFilter implements Predicate<String> {
+    /** Internal-name prefixes that are never instrumented. */
+    private static final String[] EXCLUDED_PREFIXES = {"java/", "javax/", "jdk/", "sun/", "com/sun/", "javassist/"};
+    /** Agent classes live directly in this package; subpackages (e.g. the demo) may be instrumented. */
+    private static final String AGENT_PACKAGE = "mvd/instrumentation/";
+
     private final boolean matchDefaultPackage;
     private final Set<String> exactMatches;
     private final String[] recursivePrefixes;
     private final String[] singleLevelPrefixes;
     private final Pattern[] globPatterns;
 
-    public ClassFilter(Collection<String> patterns) {
-        boolean all = false;
+    /** {@code patterns} must already be trimmed and free of comments, as returned by {@link #parseLines}. */
+    ClassFilter(Collection<String> patterns) {
         boolean defaultPkg = false;
         Set<String> exact = new HashSet<>();
         List<String> recursive = new ArrayList<>();
         List<String> single = new ArrayList<>();
         List<Pattern> globs = new ArrayList<>();
 
-        if (patterns != null) {
-            for (String raw : patterns) {
-                if (raw == null) {
-                    continue;
-                }
-                String pattern = raw.trim();
-                int commentIdx = pattern.indexOf('#');
-                if (commentIdx >= 0) {
-                    pattern = pattern.substring(0, commentIdx).trim();
-                }
-                if (pattern.isEmpty()) {
-                    continue;
-                }
+        for (String raw : patterns) {
+            // Normalize dots to slashes for JVM internal class name format
+            String pattern = raw.replace('.', '/');
 
-                // Normalize dots to slashes for JVM internal class name format
-                pattern = pattern.replace('.', '/');
+            if ("**".equals(pattern)) {
+                throw new IllegalArgumentException("'**' would instrument JDK and agent classes;"
+                        + " list your own packages instead, e.g. com.example.**");
+            }
+            if (isExcluded(pattern)) {
+                AgentLogger.warn("pattern '" + raw + "' covers JDK, javassist or agent classes, which are never instrumented");
+            }
 
-                if ("**".equals(pattern)) {
-                    all = true;
-                } else if ("*".equals(pattern)) {
-                    defaultPkg = true;
-                } else if (pattern.endsWith("/**") && pattern.indexOf('*') == pattern.length() - 2) {
-                    // e.g. "com/example/**" -> prefix "com/example/"
-                    recursive.add(pattern.substring(0, pattern.length() - 2));
-                } else if (pattern.endsWith("/*") && pattern.indexOf('*') == pattern.length() - 1) {
-                    // e.g. "com/example/*" -> prefix "com/example/"
-                    single.add(pattern.substring(0, pattern.length() - 1));
-                } else if (pattern.indexOf('*') == -1) {
-                    exact.add(pattern);
-                } else {
-                    globs.add(globToPattern(pattern));
-                }
+            if ("*".equals(pattern)) {
+                defaultPkg = true;
+            } else if (pattern.endsWith("/**") && pattern.indexOf('*') == pattern.length() - 2) {
+                // e.g. "com/example/**" -> prefix "com/example/"
+                recursive.add(pattern.substring(0, pattern.length() - 2));
+            } else if (pattern.endsWith("/*") && pattern.indexOf('*') == pattern.length() - 1) {
+                // e.g. "com/example/*" -> prefix "com/example/"
+                single.add(pattern.substring(0, pattern.length() - 1));
+            } else if (pattern.indexOf('*') == -1) {
+                exact.add(pattern);
+            } else {
+                globs.add(globToPattern(pattern));
             }
         }
 
-        this.matchAll = all;
         this.matchDefaultPackage = defaultPkg;
         this.exactMatches = Collections.unmodifiableSet(exact);
         this.recursivePrefixes = recursive.toArray(new String[0]);
@@ -89,46 +88,29 @@ public final class ClassFilter implements Predicate<String> {
         this.globPatterns = globs.toArray(new Pattern[0]);
     }
 
-    public static ClassFilter fromPatterns(String... patterns) {
-        return new ClassFilter(patterns != null ? Arrays.asList(patterns) : Collections.<String>emptyList());
+    static ClassFilter fromPatterns(String... patterns) {
+        return new ClassFilter(Arrays.asList(patterns));
     }
 
-    public static ClassFilter fromLines(Collection<String> lines) {
-        return new ClassFilter(lines);
-    }
-
-    public static ClassFilter fromReader(Reader reader) throws IOException {
-        return new ClassFilter(parseLines(reader));
-    }
-
-    public static ClassFilter fromFile(File file) {
-        if (file == null) {
-            throw new IllegalArgumentException("Configuration file can't be null.");
+    static ClassFilter fromFile(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            throw new IllegalArgumentException("Configuration file path is missing; pass it as -javaagent:<agent.jar>=<classes.cfg>");
         }
-        if (!file.exists()) {
-            throw new IllegalArgumentException("Configuration file not found: " + file.getPath());
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path)) {
+            throw new IllegalArgumentException("Configuration file not found: " + filePath);
         }
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-            return fromReader(reader);
+        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            return new ClassFilter(parseLines(reader));
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to read configuration: " + file.getPath(), e);
+            throw new UncheckedIOException("Failed to read configuration: " + filePath, e);
         }
-    }
-
-    public static ClassFilter fromFile(String filePath) {
-        if (filePath == null) {
-            throw new IllegalArgumentException("Agent args can't be null.");
-        }
-        if ("".equals(filePath)) {
-            throw new IllegalArgumentException("Agent args can't be empty.");
-        }
-        return fromFile(new File(filePath));
     }
 
     /**
      * Parses non-empty, non-comment lines from a reader, stripping inline comments and trimming whitespace.
      */
-    public static List<String> parseLines(Reader reader) throws IOException {
+    static List<String> parseLines(Reader reader) throws IOException {
         List<String> lines = new ArrayList<>();
         BufferedReader br = (reader instanceof BufferedReader) ? (BufferedReader) reader : new BufferedReader(reader);
         String line;
@@ -147,11 +129,8 @@ public final class ClassFilter implements Predicate<String> {
 
     @Override
     public boolean test(String className) {
-        if (className == null) {
+        if (className == null || isExcluded(className)) {
             return false;
-        }
-        if (matchAll) {
-            return true;
         }
         if (exactMatches.contains(className)) {
             return true;
@@ -176,6 +155,17 @@ public final class ClassFilter implements Predicate<String> {
             }
         }
         return false;
+    }
+
+    /** Also applied to patterns, to warn about entries that can never match. */
+    static boolean isExcluded(String internalName) {
+        for (String prefix : EXCLUDED_PREFIXES) {
+            if (internalName.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return internalName.startsWith(AGENT_PACKAGE)
+                && internalName.indexOf('/', AGENT_PACKAGE.length()) == -1;
     }
 
     static Pattern globToPattern(String glob) {
