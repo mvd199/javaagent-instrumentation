@@ -21,10 +21,73 @@ public class ReportConfigTest {
     public void usesDefaultsWhenNothingIsSet() {
         ReportConfig config = config();
 
+        assertEquals(50L, config.threshold);
         assertEquals("summary", config.format);
         assertEquals("stdout", config.output);
         assertEquals(100_000, config.maxEvents);
         assertTrue(config.reporter() instanceof SummaryReporter);
+    }
+
+    @Test
+    public void readsThresholdProperty() {
+        ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "120");
+
+        assertEquals(120L, config.threshold);
+    }
+
+    @Test
+    public void allowsZeroThreshold() {
+        ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "0");
+
+        assertEquals(0L, config.threshold);
+    }
+
+    @Test
+    public void capsThresholdExceedingMaxLimitAndLogsWarning() {
+        java.io.PrintStream originalErr = System.err;
+        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
+        System.setErr(new java.io.PrintStream(errBytes));
+        try {
+            ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "200000");
+
+            assertEquals(ReportConfig.MAX_THRESHOLD, config.threshold);
+            String err = errBytes.toString();
+            assertTrue(err, err.contains("DurationAgent: mvd.instrumentation.threshold (200000 ms) exceeds maximum limit of 180000 ms (3 minutes); capping to 180000 ms."));
+        } finally {
+            System.setErr(originalErr);
+        }
+    }
+
+    @Test
+    public void fallsBackToDefaultOnNegativeThresholdAndLogsWarning() {
+        java.io.PrintStream originalErr = System.err;
+        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
+        System.setErr(new java.io.PrintStream(errBytes));
+        try {
+            ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "-5");
+
+            assertEquals(ReportConfig.DEFAULT_THRESHOLD, config.threshold);
+            String err = errBytes.toString();
+            assertTrue(err, err.contains("DurationAgent: invalid mvd.instrumentation.threshold '-5'; falling back to default (50 ms)."));
+        } finally {
+            System.setErr(originalErr);
+        }
+    }
+
+    @Test
+    public void fallsBackToDefaultOnNonNumericThresholdAndLogsWarning() {
+        java.io.PrintStream originalErr = System.err;
+        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
+        System.setErr(new java.io.PrintStream(errBytes));
+        try {
+            ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "invalid_num");
+
+            assertEquals(ReportConfig.DEFAULT_THRESHOLD, config.threshold);
+            String err = errBytes.toString();
+            assertTrue(err, err.contains("DurationAgent: invalid mvd.instrumentation.threshold 'invalid_num'; falling back to default (50 ms)."));
+        } finally {
+            System.setErr(originalErr);
+        }
     }
 
     @Test

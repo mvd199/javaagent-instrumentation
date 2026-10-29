@@ -139,4 +139,32 @@ public class DurationAgentTest {
             System.setErr(originalErr);
         }
     }
+
+    @Test
+    public void recorderFiltersInvocationsAccordingToConfiguredThreshold() {
+        ReportConfig customConfig = ReportConfig.from(property -> {
+            if (ReportConfig.THRESHOLD_PROPERTY.equals(property)) {
+                return "20";
+            }
+            return null;
+        });
+        assertEquals(20L, customConfig.threshold);
+
+        Recorder customRecorder = new Recorder(customConfig.threshold, 10, () -> 0);
+        // Call taking 10ms: under 20ms threshold, should not be recorded
+        customRecorder.record("a.B.fast()", System.nanoTime() - 10_000_000L);
+        assertEquals(0, customRecorder.snapshot().records.size());
+
+        // Call taking 30ms: over 20ms threshold, should be recorded
+        customRecorder.record("a.B.medium()", System.nanoTime() - 30_000_000L);
+        assertEquals(1, customRecorder.snapshot().records.size());
+        assertEquals("a.B.medium()", customRecorder.snapshot().records.get(0).method);
+
+        // Same 30ms call with default 50ms threshold should not be recorded
+        ReportConfig defaultConfig = ReportConfig.from(property -> null);
+        assertEquals(50L, defaultConfig.threshold);
+        Recorder defaultRecorder = new Recorder(defaultConfig.threshold, 10, () -> 0);
+        defaultRecorder.record("a.B.medium()", System.nanoTime() - 30_000_000L);
+        assertEquals(0, defaultRecorder.snapshot().records.size());
+    }
 }

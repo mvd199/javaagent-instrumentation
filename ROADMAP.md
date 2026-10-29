@@ -7,13 +7,14 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 ## Progress Overview
 
 - [x] **1. Exception Handling in Instrumented Methods** *(High Priority / Bug Fix)*
-- [ ] **2. Configurable Duration Threshold** *(High Priority / Usability)*
+- [x] **2. Configurable Duration Threshold** *(High Priority / Usability)*
 - [ ] **3. Wildcard & Package Prefix Matching** *(High Priority / Usability)*
 - [ ] **4. Shaded Dependency Relocation** *(Medium Priority / Safety)*
 - [x] **5. Call Depth & Hierarchy Indentation** *(Medium Priority / UX)*
 - [x] **6. Structured & Configurable Output Format (JSON / Sinks)** *(Medium Priority / UX)*
 - [ ] **7. Support for Modern Java Editions & Tooling** *(Long-term / Modernization)*
 - [ ] **8. Dynamic JVM Attachment (`agentmain`)** *(Long-term / Advanced)*
+- [ ] **9.** Cleanup console.out everywhere, we can use instead a minimal logger with levels. Example: https://github.com/mvd199/javaagent-instrumentation/blob/d3e30585aa98640a81f73495faa70b0de081f3d5/src/main/java/mvd/instrumentation/DurationTransformer.java#L57
 
 ---
 
@@ -34,18 +35,17 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 ---
 
 ### 2. Configurable Duration Threshold
-* **Status**: Open
+* **Status**: Completed
 * **Priority**: High (Usability)
-* **Problem**: The 50 millisecond threshold is hardcoded as `private static final int MINIMAL_INVOCATION_TIME_MILLIS = 50` in [`DurationAgent.java`](src/main/java/mvd/instrumentation/DurationAgent.java). Users cannot tune the threshold for different performance profiling needs without recompiling.
-* **Proposed Solution**:
-  * Support passing threshold via agent arguments:
-    * Format: `-javaagent:agent.jar=classes.cfg;threshold=100` or `-javaagent:agent.jar=classes.cfg,threshold=100`.
-  * Support fallback to a system property: `-Dduration.threshold=100`.
-  * Fall back to default (50ms) if not specified or invalid.
+* **Problem**: The 50 millisecond threshold was hardcoded as `private static final int MINIMAL_INVOCATION_TIME_MILLIS = 50` in [`DurationAgent.java`](src/main/java/mvd/instrumentation/DurationAgent.java). Users could not tune the threshold for different performance profiling needs without recompiling.
+* **Implemented Solution**:
+  * Configured via system property: `-Dmvd.instrumentation.threshold=<ms>` (e.g. `-Dmvd.instrumentation.threshold=100`).
+  * Integrated directly into [`ReportConfig.java`](src/main/java/mvd/instrumentation/ReportConfig.java), keeping `agentArgs` dedicated solely to the configuration file path without brittle custom delimiter parsing.
+  * Defaults to `50` ms if not specified or invalid (non-numeric / negative), emitting a diagnostic warning to `System.err`.
+  * Caps values exceeding `180_000` ms (3 minutes) to 180,000 ms with a warning to `System.err`.
 * **Acceptance Criteria**:
-  * Parsing accepts configuration file path + optional threshold.
-  * Invocations taking between `1` and `N` ms are logged according to the configured threshold.
-  * Unit tests cover argument parsing with valid, invalid, and missing thresholds.
+  * Setting `-Dmvd.instrumentation.threshold` adjusts the minimum execution duration recorded by `Recorder`.
+  * Unit tests cover missing, valid, zero, negative, non-numeric, and capped thresholds.
 
 ---
 
