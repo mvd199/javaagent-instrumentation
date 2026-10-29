@@ -14,6 +14,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 - [x] **6. Structured & Configurable Output Format (JSON / Sinks)** *(Medium Priority / UX)*
 - [ ] **7. Support for Modern Java Editions & Tooling** *(Long-term / Modernization)*
 - [ ] **8. Dynamic JVM Attachment (`agentmain`)** *(Long-term / Advanced)*
+- [ ] **9.** Cleanup console.out everywhere, we can use instead a minimal logger with levels. Example: https://github.com/mvd199/javaagent-instrumentation/blob/d3e30585aa98640a81f73495faa70b0de081f3d5/src/main/java/mvd/instrumentation/DurationTransformer.java#L57
 
 ---
 
