@@ -44,10 +44,10 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
   * Configured via system property: `-Dmvd.instrumentation.agent.threshold=<ms>` (e.g. `-Dmvd.instrumentation.agent.threshold=100`).
   * Integrated directly into [`AgentConfig.java`](src/main/java/mvd/instrumentation/AgentConfig.java), keeping `agentArgs` dedicated solely to the configuration file path without brittle custom delimiter parsing.
   * Defaults to `50` ms if not specified. Non-numeric or negative values stop the agent at startup with an `IllegalArgumentException`, like the other properties.
-  * Caps values exceeding `180_000` ms (3 minutes) to 180,000 ms with a warning, so an accidental huge value (e.g. a day) cannot silently disable recording.
+  * Rejects values above `180_000` ms (3 minutes) at startup, like other out-of-range values, so an accidental huge value (e.g. a day) cannot silently disable recording. (Earlier versions capped such values with a warning.)
 * **Acceptance Criteria**:
   * Setting `-Dmvd.instrumentation.agent.threshold` adjusts the minimum execution duration recorded by `CoreRecorder`.
-  * Unit tests cover missing, valid, zero, capped, negative, and non-numeric thresholds.
+  * Unit tests cover missing, valid, zero, too-large, negative, and non-numeric thresholds.
 
 ---
 
@@ -102,7 +102,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 * **Acceptance Criteria**:
   * Nested calls appear indented under parent methods in stdout.
   * Call depth counter is thread-safe and properly decremented even on exceptions.
-* **Implementation notes**: Delivered together with #6. Depth is `CoreTransformer.currentDepth()` (the size of the existing per-thread `LongStack`, so it is exception-safe by construction). It is stored on every record, shown as indentation in the `summary` call tree, and emitted as `depth` in `json`. Output is no longer printed live, so "nested calls appear indented" applies to the end-of-run report.
+* **Implementation notes**: Delivered together with #6. Depth is the size of the per-thread `LongStack` in `CoreCallTracker` after the finished call is popped, passed to the callback with each call (so it is exception-safe by construction). It is stored on every record, shown as indentation in the `summary` call tree, and emitted as `depth` in `json`. Output is no longer printed live, so "nested calls appear indented" applies to the end-of-run report.
 
 ---
 
@@ -158,8 +158,8 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 * **Status**: Open
 * **Priority**: Medium (Architecture / Reliability)
 * **Problem**: 
-  * The `CoreTransformer` constructor currently sets a static callback (`registerStartTimeFunction = registerFunction`), so instantiating a second transformer replaces the first one’s callback.
-  * Instrumented code only works if its classloader can see the agent classes. If classes are loaded in isolated child classloaders (e.g. plugins, OSGi, application containers), attempting to invoke `CoreTransformer.pushStartTime()` results in `NoClassDefFoundError` or `ClassNotFoundException`.
+  * `CoreCallTracker` holds a single static callback (`CoreCallTracker.install(...)`), so installing a second callback replaces the first one.
+  * Instrumented code only works if its classloader can see the agent classes. If classes are loaded in isolated child classloaders (e.g. plugins, OSGi, application containers), attempting to invoke `CoreCallTracker.enter()` results in `NoClassDefFoundError` or `ClassNotFoundException`.
 * **Proposed Solution**:
   * Replace static callback assignment with an instance-safe registry or lookup mechanism.
   * Append agent runtime classes to the bootstrap classloader search path via `Instrumentation.appendToBootstrapClassLoaderSearch(jarFile)`.
