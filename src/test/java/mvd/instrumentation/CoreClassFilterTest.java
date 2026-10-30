@@ -17,77 +17,77 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 
-public class ClassFilterTest {
+public class CoreClassFilterTest {
 
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
     @Test
     public void exactMatchAcceptsTargetClass() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.Foo");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.Foo");
         assertTrue(filter.test("com/example/Foo"));
     }
 
     @Test
     public void exactMatchConvertsDotNotationToInternalForm() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.service.OrderService");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.service.OrderService");
         assertTrue(filter.test("com/example/service/OrderService"));
     }
 
     @Test
     public void exactMatchAcceptsSlashNotationDirectly() {
-        ClassFilter filter = ClassFilter.fromPatterns("com/example/Foo");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com/example/Foo");
         assertTrue(filter.test("com/example/Foo"));
     }
 
     @Test
     public void exactMatchRejectsDifferentClass() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.Foo");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.Foo");
         assertFalse(filter.test("com/example/Bar"));
     }
 
     @Test
     public void exactMatchRejectsPrefixOverlap() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.Foo");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.Foo");
         assertFalse(filter.test("com/example/FooBar"));
     }
 
     @Test
     public void exactMatchRejectsSubpackage() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.Foo");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.Foo");
         assertFalse(filter.test("com/example/Foo/Bar"));
     }
 
     @Test
     public void exactMatchAcceptsInnerClassWhenExplicitlyListed() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.Foo$Inner");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.Foo$Inner");
         assertTrue(filter.test("com/example/Foo$Inner"));
         assertFalse(filter.test("com/example/Foo"));
     }
 
     @Test
     public void singleLevelWildcardMatchesDirectClasses() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.*");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.*");
         assertTrue(filter.test("com/example/Foo"));
         assertTrue(filter.test("com/example/Bar"));
     }
 
     @Test
     public void singleLevelWildcardMatchesInnerClassesInPackage() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.*");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.*");
         assertTrue(filter.test("com/example/Foo$Inner"));
     }
 
     @Test
     public void singleLevelWildcardRejectsSubpackages() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.*");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.*");
         assertFalse(filter.test("com/example/sub/Baz"));
         assertFalse(filter.test("com/example/sub/deep/Qux"));
     }
 
     @Test
     public void singleLevelWildcardRejectsSiblingPackages() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.*");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.*");
         assertFalse(filter.test("com/example2/Foo"));
         assertFalse(filter.test("com/examples/Foo"));
         assertFalse(filter.test("org/example/Foo"));
@@ -95,13 +95,13 @@ public class ClassFilterTest {
 
     @Test
     public void singleLevelWildcardRejectsPackageItselfAsClass() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.*");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.*");
         assertFalse(filter.test("com/example"));
     }
 
     @Test
     public void defaultPackageSingleLevelWildcardMatchesRootClassesOnly() {
-        ClassFilter filter = ClassFilter.fromPatterns("*");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("*");
         assertTrue(filter.test("Main"));
         assertTrue(filter.test("AppHelper"));
         assertFalse(filter.test("com/example/Main"));
@@ -109,7 +109,7 @@ public class ClassFilterTest {
 
     @Test
     public void recursiveWildcardMatchesDirectAndNestedSubpackages() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.**");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.**");
         assertTrue(filter.test("com/example/Foo"));
         assertTrue(filter.test("com/example/sub/Bar"));
         assertTrue(filter.test("com/example/sub/deep/Baz"));
@@ -117,7 +117,7 @@ public class ClassFilterTest {
 
     @Test
     public void recursiveWildcardRejectsSiblingPackages() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.**");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.**");
         assertFalse(filter.test("com/example2/Foo"));
         assertFalse(filter.test("com/examples/Bar"));
         assertFalse(filter.test("org/example/Foo"));
@@ -125,12 +125,12 @@ public class ClassFilterTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void globalWildcardIsRejected() {
-        ClassFilter.fromPatterns("**");
+        CoreClassFilter.fromPatterns("**");
     }
 
     @Test
     public void neverMatchesJdkOrJavassistClasses() {
-        ClassFilter filter = ClassFilter.fromPatterns("java.util.**", "javax.*", "jdk.**", "sun.**",
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("java.util.**", "javax.*", "jdk.**", "sun.**",
                 "com.sun.**", "javassist.**", "java.lang.String", "java/lang/*Builder");
         assertFalse(filter.test("java/util/IdentityHashMap$KeyIterator"));
         assertFalse(filter.test("java/lang/String"));
@@ -144,16 +144,16 @@ public class ClassFilterTest {
 
     @Test
     public void neverMatchesAgentPackageOrItsSubpackages() {
-        ClassFilter filter = ClassFilter.fromPatterns("mvd.**");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("mvd.**");
         assertFalse(filter.test("mvd/instrumentation/AgentLogger"));
-        assertFalse(filter.test("mvd/instrumentation/DurationTransformer$LongStack"));
+        assertFalse(filter.test("mvd/instrumentation/CoreTransformer$LongStack"));
         assertFalse(filter.test("mvd/instrumentation/report/Anything"));
         assertTrue(filter.test("mvd/demo/DemoService"));
     }
 
     @Test
     public void doesNotExcludePackagesThatOnlyShareAPrefix() {
-        ClassFilter filter = ClassFilter.fromPatterns("javafoo.**", "sunrise.*");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("javafoo.**", "sunrise.*");
         assertTrue(filter.test("javafoo/Bar"));
         assertTrue(filter.test("sunrise/Bar"));
     }
@@ -164,7 +164,7 @@ public class ClassFilterTest {
         java.io.PrintStream originalErr = System.err;
         System.setErr(new java.io.PrintStream(errBytes));
         try {
-            ClassFilter.fromPatterns("java.util.**", "com.example.**");
+            CoreClassFilter.fromPatterns("java.util.**", "com.example.**");
         } finally {
             System.setErr(originalErr);
         }
@@ -175,7 +175,7 @@ public class ClassFilterTest {
 
     @Test
     public void arbitraryGlobMatchesPatternWithinPackage() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.*Service");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.*Service");
         assertTrue(filter.test("com/example/OrderService"));
         assertTrue(filter.test("com/example/UserService"));
         assertFalse(filter.test("com/example/OrderDao"));
@@ -184,7 +184,7 @@ public class ClassFilterTest {
 
     @Test
     public void arbitraryGlobEscapesSpecialRegexCharacters() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.Foo$*");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.Foo$*");
         assertTrue(filter.test("com/example/Foo$1"));
         assertTrue(filter.test("com/example/Foo$Inner"));
         assertFalse(filter.test("com/example/Bar$1"));
@@ -192,7 +192,7 @@ public class ClassFilterTest {
 
     @Test
     public void ignoresFullLineCommentsAndIndentedComments() throws Exception {
-        ClassFilter filter = fromConfig(
+        CoreClassFilter filter = fromConfig(
                 "# Full-line comment",
                 "   # Indented comment",
                 "com.example.Foo"
@@ -203,13 +203,13 @@ public class ClassFilterTest {
 
     @Test
     public void stripsInlineComments() throws Exception {
-        ClassFilter filter = fromConfig("com.example.Foo # inline comment");
+        CoreClassFilter filter = fromConfig("com.example.Foo # inline comment");
         assertTrue(filter.test("com/example/Foo"));
     }
 
     @Test
     public void ignoresBlankLinesAndTrimsWhitespace() throws Exception {
-        ClassFilter filter = fromConfig(
+        CoreClassFilter filter = fromConfig(
                 "",
                 "   ",
                 "\t\t",
@@ -223,13 +223,13 @@ public class ClassFilterTest {
 
     @Test
     public void nullClassNameReturnsFalseSafely() {
-        ClassFilter filter = ClassFilter.fromPatterns("com.example.**", "com.other.*", "com.Single");
+        CoreClassFilter filter = CoreClassFilter.fromPatterns("com.example.**", "com.other.*", "com.Single");
         assertFalse(filter.test(null));
     }
 
     @Test
     public void emptyFilterRejectsAllClasses() {
-        ClassFilter filter = ClassFilter.fromPatterns();
+        CoreClassFilter filter = CoreClassFilter.fromPatterns();
         assertFalse(filter.test("com/example/Foo"));
         assertFalse(filter.test("Main"));
         assertFalse(filter.test(null));
@@ -237,17 +237,17 @@ public class ClassFilterTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void fromFileRejectsNullPath() {
-        ClassFilter.fromFile((String) null);
+        CoreClassFilter.fromFile((String) null);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void fromFileRejectsEmptyPath() {
-        ClassFilter.fromFile("");
+        CoreClassFilter.fromFile("");
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void fromFileRejectsMissingFile() {
-        ClassFilter.fromFile(new File(folder.getRoot(), "missing.cfg").getPath());
+        CoreClassFilter.fromFile(new File(folder.getRoot(), "missing.cfg").getPath());
     }
 
     @Test
@@ -263,7 +263,7 @@ public class ClassFilterTest {
                 "com.example.repo.** # repository hierarchy"
         ));
 
-        ClassFilter filter = ClassFilter.fromFile(config.getPath());
+        CoreClassFilter filter = CoreClassFilter.fromFile(config.getPath());
 
         assertTrue(filter.test("com/example/Exact"));
         assertTrue(filter.test("com/example/service/OrderService"));
@@ -275,7 +275,7 @@ public class ClassFilterTest {
 
     @Test
     public void parseLinesReturnsOnlyCleanedLines() {
-        List<String> lines = ClassFilter.parseLines(Arrays.asList(
+        List<String> lines = CoreClassFilter.parseLines(Arrays.asList(
                 "# header", "", "com.example.A", "  com.example.B # with comment", "", "# footer"));
         assertEquals(Arrays.asList("com.example.A", "com.example.B"), lines);
     }
@@ -290,7 +290,7 @@ public class ClassFilterTest {
                 "com/example/OrderService", "com/example/sub/OrderService", "com/example/sub/deep/Baz",
                 "com/example2/Foo", "com/a/Repo", "com/a/b/Repo", "com/a/web/Controller", "com/a/web/x/Controller");
         for (String glob : globs) {
-            ClassFilter filter = ClassFilter.fromPatterns(glob);
+            CoreClassFilter filter = CoreClassFilter.fromPatterns(glob);
             PathMatcher jdk = FileSystems.getDefault().getPathMatcher("glob:" + glob);
             for (String className : classNames) {
                 assertEquals(glob + " vs " + className, jdk.matches(Paths.get(className)), filter.test(className));
@@ -300,7 +300,7 @@ public class ClassFilterTest {
 
     @Test
     public void multipleRulesCombineUnionLogic() {
-        ClassFilter filter = ClassFilter.fromPatterns(
+        CoreClassFilter filter = CoreClassFilter.fromPatterns(
                 "com.example.specific.Target",
                 "com.example.web.*",
                 "com.example.core.**"
@@ -314,7 +314,7 @@ public class ClassFilterTest {
         assertFalse(filter.test("com/unrelated/Class"));
     }
 
-    private static ClassFilter fromConfig(String... lines) throws Exception {
-        return new ClassFilter(ClassFilter.parseLines(Arrays.asList(lines)));
+    private static CoreClassFilter fromConfig(String... lines) throws Exception {
+        return new CoreClassFilter(CoreClassFilter.parseLines(Arrays.asList(lines)));
     }
 }

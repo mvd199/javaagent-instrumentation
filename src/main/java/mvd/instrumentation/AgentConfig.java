@@ -16,7 +16,7 @@ import java.util.function.Function;
  * - Core agent configs: mvd.instrumentation.agent.threshold, mvd.instrumentation.agent.maxEvents
  * - Report configs: mvd.instrumentation.report.format, mvd.instrumentation.report.output
  */
-final class ReportConfig {
+final class AgentConfig {
     static final String THRESHOLD_PROPERTY = "mvd.instrumentation.agent.threshold";
     static final String MAX_EVENTS_PROPERTY = "mvd.instrumentation.agent.maxEvents";
     static final String FORMAT_PROPERTY = "mvd.instrumentation.report.format";
@@ -33,21 +33,21 @@ final class ReportConfig {
     final String format;
     final String output;
     final int maxEvents;
-    final Reporter reporter;
+    final ReportFormatter reporter;
 
-    private ReportConfig(String format, String output, int maxEvents, long threshold) {
+    private AgentConfig(String format, String output, int maxEvents, long threshold) {
         this.format = format;
         this.output = output;
         this.maxEvents = maxEvents;
         this.threshold = threshold;
-        this.reporter = "json".equals(format) ? new JsonReporter() : new SummaryReporter();
+        this.reporter = "json".equals(format) ? new ReportJsonFormatter() : new ReportSummaryFormatter();
     }
 
-    static ReportConfig fromSystemProperties() {
+    static AgentConfig fromSystemProperties() {
         return from(System::getProperty);
     }
 
-    static ReportConfig from(Function<String, String> properties) {
+    static AgentConfig from(Function<String, String> properties) {
         String format = valueOrDefault(properties.apply(FORMAT_PROPERTY), DEFAULT_FORMAT).toLowerCase(Locale.ROOT);
         if (!"summary".equals(format) && !"json".equals(format)) {
             throw new IllegalArgumentException("Unknown " + FORMAT_PROPERTY + ": " + format + " (expected summary or json)");
@@ -58,7 +58,7 @@ final class ReportConfig {
                 readLong(properties, MAX_EVENTS_PROPERTY, DEFAULT_MAX_EVENTS), 1, Integer.MAX_VALUE);
         long threshold = capThreshold(requireInRange(THRESHOLD_PROPERTY,
                 readLong(properties, THRESHOLD_PROPERTY, DEFAULT_THRESHOLD), 0, Long.MAX_VALUE));
-        return new ReportConfig(format, output, maxEvents, threshold);
+        return new AgentConfig(format, output, maxEvents, threshold);
     }
 
     /** Reading only: returns the default when unset or blank, throws if the value is not a number. */
@@ -93,7 +93,7 @@ final class ReportConfig {
         return MAX_THRESHOLD;
     }
 
-    Reporter reporter() {
+    ReportFormatter reporter() {
         return reporter;
     }
 

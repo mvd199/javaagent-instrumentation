@@ -12,17 +12,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class SummaryReporterTest {
+public class ReportSummaryFormatterTest {
     private static final long MS = 1_000_000L;
 
-    private static CallRecord call(String thread, String method, long startMs, long durationMs, int depth) {
-        return new CallRecord(startMs * MS, 1_000_000L + startMs, thread, method, durationMs, depth);
+    private static ReportRecord call(String thread, String method, long startMs, long durationMs, int depth) {
+        return new ReportRecord(startMs * MS, 1_000_000L + startMs, thread, method, durationMs, depth);
     }
 
     private static String render(Report report) {
         StringWriter text = new StringWriter();
         PrintWriter out = new PrintWriter(text);
-        new SummaryReporter().write(report, out);
+        new ReportSummaryFormatter().write(report, out);
         out.flush();
         return text.toString();
     }
@@ -42,7 +42,7 @@ public class SummaryReporterTest {
 
     @Test
     public void headerShowsCountsThreadsAndWallTime() {
-        List<CallRecord> records = Arrays.asList(
+        List<ReportRecord> records = Arrays.asList(
                 call("main", "a.B.run()", 0, 1000, 0),
                 call("worker", "a.B.job()", 500, 1500, 0));
 
@@ -53,7 +53,7 @@ public class SummaryReporterTest {
 
     @Test
     public void aggregatesPerMethodAndRanksByTotalTime() {
-        List<CallRecord> records = Arrays.asList(
+        List<ReportRecord> records = Arrays.asList(
                 call("main", "a.B.many()", 0, 100, 0),
                 call("main", "a.B.many()", 200, 300, 0),
                 call("main", "a.B.once()", 600, 350, 0));
@@ -68,7 +68,7 @@ public class SummaryReporterTest {
 
     @Test
     public void limitsTheMethodTableToTopTen() {
-        List<CallRecord> records = new ArrayList<>();
+        List<ReportRecord> records = new ArrayList<>();
         for (int i = 0; i < 12; i++) {
             records.add(call("main", "a.B.m" + i + "()", i * 10, 100 + i, 0));
         }
@@ -89,7 +89,7 @@ public class SummaryReporterTest {
     @Test
     public void callTreeIndentsChildrenUnderTheirParentsInStartOrder() {
         // Records are given in completion order, inner call first.
-        List<CallRecord> records = Arrays.asList(
+        List<ReportRecord> records = Arrays.asList(
                 call("main", "a.B.child()", 8, 310, 1),
                 call("main", "a.B.parent()", 5, 640, 0),
                 call("main", "a.B.second()", 700, 210, 0));
@@ -104,7 +104,7 @@ public class SummaryReporterTest {
 
     @Test
     public void callTreeHasOneSectionPerThreadWithOffsetsFromTheFirstCall() {
-        List<CallRecord> records = Arrays.asList(
+        List<ReportRecord> records = Arrays.asList(
                 call("main", "a.B.run()", 0, 1200, 0),
                 call("worker-1", "a.B.job()", 40, 60, 0));
 
@@ -117,8 +117,8 @@ public class SummaryReporterTest {
 
     @Test
     public void callTreeIsCappedPerThreadWithAMoreLine() {
-        List<CallRecord> records = new ArrayList<>();
-        int total = SummaryReporter.MAX_TREE_LINES_PER_THREAD + 5;
+        List<ReportRecord> records = new ArrayList<>();
+        int total = ReportSummaryFormatter.MAX_TREE_LINES_PER_THREAD + 5;
         for (int i = 0; i < total; i++) {
             records.add(call("main", "a.B.m()", i, 60, 0));
         }
@@ -126,13 +126,13 @@ public class SummaryReporterTest {
         List<String> lines = lines(render(new Report(records, 0, 50)));
 
         long treeLines = lines.stream().filter(l -> l.startsWith("  [")).count();
-        assertEquals(SummaryReporter.MAX_TREE_LINES_PER_THREAD, treeLines);
+        assertEquals(ReportSummaryFormatter.MAX_TREE_LINES_PER_THREAD, treeLines);
         assertTrue(lines.contains("  ... 5 more"));
     }
 
     @Test
     public void alignsOffsetsBeyondFourDigits() {
-        List<CallRecord> records = Arrays.asList(
+        List<ReportRecord> records = Arrays.asList(
                 call("main", "a.B.early()", 0, 100, 0),
                 call("main", "a.B.late()", 12345, 100, 0));
 

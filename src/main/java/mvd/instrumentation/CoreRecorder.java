@@ -11,15 +11,15 @@ import java.util.function.IntSupplier;
  * Buffers calls slower than the threshold in memory until the report is written.
  * Holds at most {@code maxEvents} records; further slow calls are only counted.
  */
-final class Recorder {
+final class CoreRecorder {
     private final long thresholdMs;
     private final int maxEvents;
     private final IntSupplier depthSource;
-    private final Queue<CallRecord> records = new ConcurrentLinkedQueue<>();
+    private final Queue<ReportRecord> records = new ConcurrentLinkedQueue<>();
     private final AtomicLong totalSlowCalls = new AtomicLong();
 
     /** {@code depthSource} is only consulted for calls that pass the threshold, keeping fast calls cheap. */
-    Recorder(long thresholdMs, int maxEvents, IntSupplier depthSource) {
+    CoreRecorder(long thresholdMs, int maxEvents, IntSupplier depthSource) {
         this.thresholdMs = thresholdMs;
         this.maxEvents = maxEvents;
         this.depthSource = depthSource;
@@ -33,7 +33,7 @@ final class Recorder {
         if (totalSlowCalls.incrementAndGet() > maxEvents) {
             return;
         }
-        records.add(new CallRecord(startNanos, System.currentTimeMillis() - durationMs,
+        records.add(new ReportRecord(startNanos, System.currentTimeMillis() - durationMs,
                 Thread.currentThread().getName(), method, durationMs, depthSource.getAsInt()));
     }
 

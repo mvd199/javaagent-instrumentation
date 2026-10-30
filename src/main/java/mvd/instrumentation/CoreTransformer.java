@@ -13,13 +13,13 @@ import javassist.CtBehavior;
 import javassist.CtClass;
 import javassist.CtMethod;
 
-public class DurationTransformer implements ClassFileTransformer {
-    private static DurationCallback registerStartTimeFunction = (method, startNanos) -> { };
+public class CoreTransformer implements ClassFileTransformer {
+    private static CoreCallback registerStartTimeFunction = (method, startNanos) -> { };
 
     private final Predicate<String> allowTransformationPredicate;
     private final ClassPool classPool = ClassPool.getDefault();
 
-    DurationTransformer(Predicate<String> allowTransformationPredicate, DurationCallback registerFunction) {
+    CoreTransformer(Predicate<String> allowTransformationPredicate, CoreCallback registerFunction) {
         this.allowTransformationPredicate = allowTransformationPredicate;
         registerStartTimeFunction = registerFunction;
     }
@@ -28,9 +28,9 @@ public class DurationTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className,
                             Class<?> classBeingRedefined, ProtectionDomain protectionDomain,
                             byte[] classfileBuffer) throws IllegalClassFormatException {
-        // A null loader is the bootstrap loader. The injected code calls DurationTransformer, which is on the
+        // A null loader is the bootstrap loader. The injected code calls CoreTransformer, which is on the
         // system class path where bootstrap classes cannot see it, so it would throw NoClassDefFoundError.
-        // ClassFilter's excluded prefixes cover most of these too, but not classes added with -Xbootclasspath/a.
+        // CoreClassFilter's excluded prefixes cover most of these too, but not classes added with -Xbootclasspath/a.
         if (loader == null || !allowTransformationPredicate.test(className)) {
             return null;
         }
@@ -70,8 +70,8 @@ public class DurationTransformer implements ClassFileTransformer {
     private static final ThreadLocal<LongStack> TIMESTAMPS = ThreadLocal.withInitial(LongStack::new);
 
     private static <T extends CtBehavior> void emit(T target) throws CannotCompileException {
-        target.insertBefore("mvd.instrumentation.DurationTransformer.pushStartTime();");
-        target.insertAfter("mvd.instrumentation.DurationTransformer.popAndRegisterStartTime(\"" + target.getLongName() + "\");", true);
+        target.insertBefore("mvd.instrumentation.CoreTransformer.pushStartTime();");
+        target.insertAfter("mvd.instrumentation.CoreTransformer.popAndRegisterStartTime(\"" + target.getLongName() + "\");", true);
     }
 
     /** Used by instrumentation code to push start timestamp at method entry. */

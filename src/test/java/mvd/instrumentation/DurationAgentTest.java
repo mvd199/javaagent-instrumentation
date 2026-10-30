@@ -26,7 +26,7 @@ public class DurationAgentTest {
                 "com.example.repo.**"
         ));
 
-        ClassFilter filter = DurationAgent.createClassFilter(config.getPath());
+        CoreClassFilter filter = DurationAgent.createClassFilter(config.getPath());
 
         assertTrue(filter.test("com/example/service/OrderService"));
         assertTrue(filter.test("com/example/repo/jpa/UserRepo"));
@@ -36,14 +36,14 @@ public class DurationAgentTest {
     @Test
     public void writeReportWritesConfiguredFormatToConfiguredFile() throws Exception {
         File output = new File(folder.getRoot(), "report.jsonl");
-        ReportConfig config = ReportConfig.from(property -> {
+        AgentConfig config = AgentConfig.from(property -> {
             switch (property) {
-                case ReportConfig.FORMAT_PROPERTY: return "json";
-                case ReportConfig.OUTPUT_PROPERTY: return output.getPath();
+                case AgentConfig.FORMAT_PROPERTY: return "json";
+                case AgentConfig.OUTPUT_PROPERTY: return output.getPath();
                 default: return null;
             }
         });
-        Recorder recorder = new Recorder(0, 10, () -> 0);
+        CoreRecorder recorder = new CoreRecorder(0, 10, () -> 0);
         recorder.record("a.B.slow()", System.nanoTime() - 20_000_000L);
 
         DurationAgent.writeReport(recorder, config);
@@ -64,18 +64,18 @@ public class DurationAgentTest {
             }
             @Override public void close() { }
         };
-        Recorder recorder = new Recorder(0, 10, () -> 0);
+        CoreRecorder recorder = new CoreRecorder(0, 10, () -> 0);
         recorder.record("a.B.slow()", System.nanoTime() - 20_000_000L);
 
-        assertEquals(false, DurationAgent.writeTo(new java.io.PrintWriter(failing), new JsonReporter(), recorder.snapshot()));
+        assertEquals(false, DurationAgent.writeTo(new java.io.PrintWriter(failing), new ReportJsonFormatter(), recorder.snapshot()));
     }
 
     @Test
     public void writeToReportsTrueWhenWritingSucceeds() {
         java.io.StringWriter ok = new java.io.StringWriter();
 
-        assertEquals(true, DurationAgent.writeTo(new java.io.PrintWriter(ok), new JsonReporter(),
-                new Report(java.util.Collections.<CallRecord>emptyList(), 0, 50)));
+        assertEquals(true, DurationAgent.writeTo(new java.io.PrintWriter(ok), new ReportJsonFormatter(),
+                new Report(java.util.Collections.<ReportRecord>emptyList(), 0, 50)));
     }
 
     @Test
@@ -87,10 +87,10 @@ public class DurationAgentTest {
             }
             @Override public void close() { }
         };
-        Recorder recorder = new Recorder(0, 10, () -> 0);
+        CoreRecorder recorder = new CoreRecorder(0, 10, () -> 0);
         recorder.record("a.B.slow()", System.nanoTime() - 20_000_000L);
 
-        assertEquals(false, DurationAgent.writeTo(new java.io.PrintWriter(failingFlush), new JsonReporter(), recorder.snapshot()));
+        assertEquals(false, DurationAgent.writeTo(new java.io.PrintWriter(failingFlush), new ReportJsonFormatter(), recorder.snapshot()));
     }
 
     @Test
@@ -100,15 +100,15 @@ public class DurationAgentTest {
         System.setErr(new java.io.PrintStream(errBytes));
         try {
             File output = new File(folder.getRoot(), "report.jsonl");
-            ReportConfig config = ReportConfig.from(property -> {
+            AgentConfig config = AgentConfig.from(property -> {
                 switch (property) {
-                    case ReportConfig.FORMAT_PROPERTY: return "json";
-                    case ReportConfig.OUTPUT_PROPERTY: return output.getPath();
-                    case ReportConfig.MAX_EVENTS_PROPERTY: return "1";
+                    case AgentConfig.FORMAT_PROPERTY: return "json";
+                    case AgentConfig.OUTPUT_PROPERTY: return output.getPath();
+                    case AgentConfig.MAX_EVENTS_PROPERTY: return "1";
                     default: return null;
                 }
             });
-            Recorder recorder = new Recorder(0, 1, () -> 0);
+            CoreRecorder recorder = new CoreRecorder(0, 1, () -> 0);
             recorder.record("a.B.first()", System.nanoTime() - 20_000_000L);
             recorder.record("a.B.second()", System.nanoTime() - 20_000_000L);
 
@@ -125,15 +125,15 @@ public class DurationAgentTest {
 
     @Test
     public void recorderFiltersInvocationsAccordingToConfiguredThreshold() {
-        ReportConfig customConfig = ReportConfig.from(property -> {
-            if (ReportConfig.THRESHOLD_PROPERTY.equals(property)) {
+        AgentConfig customConfig = AgentConfig.from(property -> {
+            if (AgentConfig.THRESHOLD_PROPERTY.equals(property)) {
                 return "20";
             }
             return null;
         });
         assertEquals(20L, customConfig.threshold);
 
-        Recorder customRecorder = new Recorder(customConfig.threshold, 10, () -> 0);
+        CoreRecorder customRecorder = new CoreRecorder(customConfig.threshold, 10, () -> 0);
         // Call taking 10ms: under 20ms threshold, should not be recorded
         customRecorder.record("a.B.fast()", System.nanoTime() - 10_000_000L);
         assertEquals(0, customRecorder.snapshot().records.size());
@@ -144,9 +144,9 @@ public class DurationAgentTest {
         assertEquals("a.B.medium()", customRecorder.snapshot().records.get(0).method);
 
         // Same 30ms call with default 50ms threshold should not be recorded
-        ReportConfig defaultConfig = ReportConfig.from(property -> null);
+        AgentConfig defaultConfig = AgentConfig.from(property -> null);
         assertEquals(50L, defaultConfig.threshold);
-        Recorder defaultRecorder = new Recorder(defaultConfig.threshold, 10, () -> 0);
+        CoreRecorder defaultRecorder = new CoreRecorder(defaultConfig.threshold, 10, () -> 0);
         defaultRecorder.record("a.B.medium()", System.nanoTime() - 30_000_000L);
         assertEquals(0, defaultRecorder.snapshot().records.size());
     }

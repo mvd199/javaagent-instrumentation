@@ -7,18 +7,18 @@ import java.lang.instrument.Instrumentation;
 public class DurationAgent {
 
     public static void premain(String agentArgs, Instrumentation inst) {
-        ClassFilter filter = createClassFilter(agentArgs);
-        ReportConfig config = ReportConfig.fromSystemProperties();
-        Recorder recorder = new Recorder(config.threshold, config.maxEvents, DurationTransformer::currentDepth);
-        inst.addTransformer(new DurationTransformer(filter, recorder::record));
+        CoreClassFilter filter = createClassFilter(agentArgs);
+        AgentConfig config = AgentConfig.fromSystemProperties();
+        CoreRecorder recorder = new CoreRecorder(config.threshold, config.maxEvents, CoreTransformer::currentDepth);
+        inst.addTransformer(new CoreTransformer(filter, recorder::record));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> writeReport(recorder, config), "duration-agent-report"));
     }
 
-    static ClassFilter createClassFilter(String agentArgs) {
-        return ClassFilter.fromFile(agentArgs);
+    static CoreClassFilter createClassFilter(String agentArgs) {
+        return CoreClassFilter.fromFile(agentArgs);
     }
 
-    static void writeReport(Recorder recorder, ReportConfig config) {
+    static void writeReport(CoreRecorder recorder, AgentConfig config) {
         Report report = recorder.snapshot();
         if (report.dropped > 0 && "json".equals(config.format)) {
             AgentLogger.LOG.warn("dropped " + report.dropped + " calls exceeding maxEvents (" + config.maxEvents + ")");
@@ -47,7 +47,7 @@ public class DurationAgent {
     }
 
     /** Returns false if the writer hit an I/O error, which PrintWriter otherwise swallows. */
-    static boolean writeTo(PrintWriter out, Reporter reporter, Report report) {
+    static boolean writeTo(PrintWriter out, ReportFormatter reporter, Report report) {
         reporter.write(report, out);
         out.flush();
         return !out.checkError();

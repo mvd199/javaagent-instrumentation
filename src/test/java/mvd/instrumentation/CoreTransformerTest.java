@@ -16,9 +16,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class DurationTransformerTest {
+public class CoreTransformerTest {
     private static final String TARGET = "mvd/instrumentation/SampleTarget";
-    private static final ClassLoader LOADER = DurationTransformerTest.class.getClassLoader();
+    private static final ClassLoader LOADER = CoreTransformerTest.class.getClassLoader();
 
     private final List<String> reportedMethods = new ArrayList<>();
     private final List<Long> reportedStartTimes = new ArrayList<>();
@@ -31,14 +31,14 @@ public class DurationTransformerTest {
 
     @Test
     public void returnsNullForClassesOutsideWhitelist() throws Exception {
-        DurationTransformer transformer = transformerAllowing(name -> false);
+        CoreTransformer transformer = transformerAllowing(name -> false);
 
         assertNull(transformer.transform(LOADER, TARGET, null, null, classBytes(TARGET)));
     }
 
     @Test
     public void returnsNullForBootstrapClasses() throws Exception {
-        DurationTransformer transformer = transformerAllowing(name -> true);
+        CoreTransformer transformer = transformerAllowing(name -> true);
 
         assertNull(transformer.transform(null, TARGET, null, null, classBytes(TARGET)));
     }
@@ -122,13 +122,13 @@ public class DurationTransformerTest {
     @Test
     public void currentDepthInsideCallbackCountsActiveInstrumentedFrames() throws Exception {
         List<Integer> depths = new ArrayList<>();
-        Object target = instrumentedInstance((method, start) -> depths.add(DurationTransformer.currentDepth()));
+        Object target = instrumentedInstance((method, start) -> depths.add(CoreTransformer.currentDepth()));
 
         target.getClass().getMethod("recurse", int.class).invoke(target, 2);
 
         // Completion order is innermost first: recurse(0) has 2 active parents, the outermost call has none.
         assertEquals(java.util.Arrays.asList(2, 1, 0), depths);
-        assertEquals(0, DurationTransformer.currentDepth());
+        assertEquals(0, CoreTransformer.currentDepth());
     }
 
     @Test
@@ -141,7 +141,7 @@ public class DurationTransformerTest {
             // the fixture throws on purpose
         }
 
-        assertEquals(0, DurationTransformer.currentDepth());
+        assertEquals(0, CoreTransformer.currentDepth());
     }
 
     @Test
@@ -167,16 +167,16 @@ public class DurationTransformerTest {
 
     @Test
     public void longStackReturnsSentinelWhenEmpty() {
-        DurationTransformer.LongStack stack = new DurationTransformer.LongStack();
+        CoreTransformer.LongStack stack = new CoreTransformer.LongStack();
         assertEquals(0, stack.size());
         assertEquals(32, stack.capacity());
-        assertEquals(DurationTransformer.LongStack.SENTINEL, stack.pop());
+        assertEquals(CoreTransformer.LongStack.SENTINEL, stack.pop());
         assertEquals(0, stack.size());
     }
 
     @Test
     public void longStackPushesAndPopsInLifoOrder() {
-        DurationTransformer.LongStack stack = new DurationTransformer.LongStack();
+        CoreTransformer.LongStack stack = new CoreTransformer.LongStack();
         stack.push(100L);
         stack.push(200L);
         stack.push(300L);
@@ -185,12 +185,12 @@ public class DurationTransformerTest {
         assertEquals(300L, stack.pop());
         assertEquals(200L, stack.pop());
         assertEquals(100L, stack.pop());
-        assertEquals(DurationTransformer.LongStack.SENTINEL, stack.pop());
+        assertEquals(CoreTransformer.LongStack.SENTINEL, stack.pop());
     }
 
     @Test
     public void longStackExpandsCapacityBeyondInitial32() {
-        DurationTransformer.LongStack stack = new DurationTransformer.LongStack();
+        CoreTransformer.LongStack stack = new CoreTransformer.LongStack();
         for (int i = 0; i < 40; i++) {
             stack.push((long) i);
         }
@@ -201,7 +201,7 @@ public class DurationTransformerTest {
         for (int i = 39; i >= 0; i--) {
             assertEquals((long) i, stack.pop());
         }
-        assertEquals(DurationTransformer.LongStack.SENTINEL, stack.pop());
+        assertEquals(CoreTransformer.LongStack.SENTINEL, stack.pop());
     }
 
     @Test
@@ -210,18 +210,18 @@ public class DurationTransformerTest {
         // callback that popAndRegisterStartTime() would invoke if it did not ignore the sentinel.
         transformerAllowing(TARGET::equals);
         // Pop without any preceding push: should hit SENTINEL and ignore callback
-        DurationTransformer.popAndRegisterStartTime("unmatched.Method");
+        CoreTransformer.popAndRegisterStartTime("unmatched.Method");
         assertTrue("Callback should not be invoked when popping sentinel", reportedMethods.isEmpty());
     }
 
-    private DurationTransformer transformerAllowing(Predicate<String> whitelist) {
-        return new DurationTransformer(whitelist, (method, start) -> {
+    private CoreTransformer transformerAllowing(Predicate<String> whitelist) {
+        return new CoreTransformer(whitelist, (method, start) -> {
             reportedMethods.add(method);
             reportedStartTimes.add(start);
         });
     }
 
-    private static DurationCallback throwingCallback() {
+    private static CoreCallback throwingCallback() {
         return (method, start) -> {
             throw new RuntimeException("callback failure");
         };
@@ -234,8 +234,8 @@ public class DurationTransformerTest {
         });
     }
 
-    private Object instrumentedInstance(DurationCallback callback) throws Exception {
-        byte[] transformed = new DurationTransformer(TARGET::equals, callback)
+    private Object instrumentedInstance(CoreCallback callback) throws Exception {
+        byte[] transformed = new CoreTransformer(TARGET::equals, callback)
                 .transform(LOADER, TARGET, null, null, classBytes(TARGET));
         assertNotNull(transformed);
         return new SingleClassLoader(TARGET.replace('/', '.'), transformed, getClass().getClassLoader())
@@ -245,7 +245,7 @@ public class DurationTransformerTest {
     }
 
     private static byte[] classBytes(String internalName) throws IOException {
-        try (InputStream in = DurationTransformerTest.class.getClassLoader()
+        try (InputStream in = CoreTransformerTest.class.getClassLoader()
                 .getResourceAsStream(internalName + ".class")) {
             assertNotNull("Class file not found: " + internalName, in);
             ByteArrayOutputStream out = new ByteArrayOutputStream();

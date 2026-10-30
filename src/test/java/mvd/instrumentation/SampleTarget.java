@@ -1,6 +1,6 @@
 package mvd.instrumentation;
 
-/** Fixture class instrumented by {@link DurationTransformerTest}. */
+/** Fixture class instrumented by {@link CoreTransformerTest}. */
 public class SampleTarget {
     public int add(int a, int b) {
         return a + b;

@@ -1,7 +1,7 @@
 package mvd.instrumentation;
 
 /** A single instrumented invocation that exceeded the duration threshold. */
-final class CallRecord {
+final class ReportRecord {
     final long startNanos;
     final long timestampMillis;
     final String thread;
@@ -10,7 +10,7 @@ final class CallRecord {
     /** Number of instrumented frames above this call on the same thread; 0 for an outermost call. */
     final int depth;
 
-    CallRecord(long startNanos, long timestampMillis, String thread, String method, long durationMs, int depth) {
+    ReportRecord(long startNanos, long timestampMillis, String thread, String method, long durationMs, int depth) {
         this.startNanos = startNanos;
         this.timestampMillis = timestampMillis;
         this.thread = thread;
