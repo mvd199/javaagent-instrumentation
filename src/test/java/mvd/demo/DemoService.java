@@ -1,4 +1,4 @@
-package mvd.instrumentation.demo;
+package mvd.demo;
 
 /**
  * Sample service used to demonstrate DurationAgent instrumentation.

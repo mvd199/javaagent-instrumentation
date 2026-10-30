@@ -1,29 +1,27 @@
 package mvd.instrumentation;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.UncheckedIOException;
 import java.lang.instrument.Instrumentation;
-import java.nio.file.Files;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 public class DurationAgent {
-    private static final int MINIMAL_INVOCATION_TIME_MILLIS = 50;
 
     public static void premain(String agentArgs, Instrumentation inst) {
-        Set<String> whiteList = createWhitelist(agentArgs);
+        ClassFilter filter = createClassFilter(agentArgs);
         ReportConfig config = ReportConfig.fromSystemProperties();
-        Recorder recorder = new Recorder(MINIMAL_INVOCATION_TIME_MILLIS, config.maxEvents, DurationTransformer::currentDepth);
-        inst.addTransformer(new DurationTransformer(whiteList::contains, recorder::record));
+        Recorder recorder = new Recorder(config.threshold, config.maxEvents, DurationTransformer::currentDepth);
+        inst.addTransformer(new DurationTransformer(filter, recorder::record));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> writeReport(recorder, config), "duration-agent-report"));
+    }
+
+    static ClassFilter createClassFilter(String agentArgs) {
+        return ClassFilter.fromFile(agentArgs);
     }
 
     static void writeReport(Recorder recorder, ReportConfig config) {
         Report report = recorder.snapshot();
         if (report.dropped > 0 && "json".equals(config.format)) {
-            System.err.println("DurationAgent: dropped " + report.dropped + " calls exceeding maxEvents (" + config.maxEvents + ")");
+            AgentLogger.LOG.warn("dropped " + report.dropped + " calls exceeding maxEvents (" + config.maxEvents + ")");
         }
         PrintWriter out = null;
         boolean error = false;
@@ -33,8 +31,7 @@ public class DurationAgent {
                 error = true;
             }
         } catch (IOException | RuntimeException e) {
-            System.err.println("DurationAgent: failed to write report to " + config.output);
-            e.printStackTrace();
+            AgentLogger.LOG.error("failed to write report to " + config.output, e);
             return;
         } finally {
             if (out != null) {
@@ -45,7 +42,7 @@ public class DurationAgent {
             }
         }
         if (error) {
-            System.err.println("DurationAgent: report to " + config.output + " may be incomplete (write error)");
+            AgentLogger.LOG.error("report to " + config.output + " may be incomplete (write error)");
         }
     }
 
@@ -54,26 +51,5 @@ public class DurationAgent {
         reporter.write(report, out);
         out.flush();
         return !out.checkError();
-    }
-
-    static Set<String> createWhitelist(String agentArgs) {
-        if (agentArgs == null) {
-            throw new IllegalArgumentException("Agent args can't be null.");
-        }
-        if ("".equals(agentArgs)) {
-            throw new IllegalArgumentException("Agent args can't be empty.");
-        }
-        File configuration = new File(agentArgs);
-        if (!configuration.exists()) {
-            throw new IllegalArgumentException("Configuration file not found: " + agentArgs);
-        }
-
-        try {
-            return Files.lines(configuration.toPath())
-                    .map(s -> s.replace('.', '/'))
-                    .collect(Collectors.toSet());
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to read configuration.", e);
-        }
     }
 }

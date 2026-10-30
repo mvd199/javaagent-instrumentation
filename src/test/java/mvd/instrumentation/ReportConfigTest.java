@@ -7,6 +7,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ReportConfigTest {
     private static ReportConfig config(String... keyValues) {
@@ -21,10 +22,66 @@ public class ReportConfigTest {
     public void usesDefaultsWhenNothingIsSet() {
         ReportConfig config = config();
 
+        assertEquals(50L, config.threshold);
         assertEquals("summary", config.format);
         assertEquals("stdout", config.output);
         assertEquals(100_000, config.maxEvents);
         assertTrue(config.reporter() instanceof SummaryReporter);
+    }
+
+    @Test
+    public void readsThresholdProperty() {
+        ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "120");
+
+        assertEquals(120L, config.threshold);
+    }
+
+    @Test
+    public void allowsZeroThreshold() {
+        ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "0");
+
+        assertEquals(0L, config.threshold);
+    }
+
+    @Test
+    public void acceptsThresholdAtMaxLimit() {
+        ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "180000");
+
+        assertEquals(ReportConfig.MAX_THRESHOLD, config.threshold);
+    }
+
+    @Test
+    public void capsThresholdExceedingMaxLimitAndLogsWarning() {
+        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream originalErr = System.err;
+        System.setErr(new java.io.PrintStream(errBytes));
+        try {
+            ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "86400000");
+
+            assertEquals(ReportConfig.MAX_THRESHOLD, config.threshold);
+        } finally {
+            System.setErr(originalErr);
+        }
+        String err = errBytes.toString();
+        assertTrue(err, err.contains("[WARN] " + ReportConfig.THRESHOLD_PROPERTY
+                + " (86400000 ms) exceeds maximum limit of 180000 ms (3 minutes); capping to 180000 ms."));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsNegativeThreshold() {
+        config(ReportConfig.THRESHOLD_PROPERTY, "-5");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsNonNumericThreshold() {
+        config(ReportConfig.THRESHOLD_PROPERTY, "invalid_num");
+    }
+
+    @Test
+    public void ignoresRemovedDurationProperties() {
+        ReportConfig config = ReportConfig.from(property -> property.startsWith("duration.") ? "json" : null);
+
+        assertEquals("summary", config.format);
     }
 
     @Test
@@ -61,6 +118,27 @@ public class ReportConfigTest {
     @Test(expected = IllegalArgumentException.class)
     public void rejectsNonPositiveMaxEvents() {
         config(ReportConfig.MAX_EVENTS_PROPERTY, "0");
+    }
+
+    @Test
+    public void rejectsMaxEventsAboveIntRangeNamingTheRange() {
+        assertMessage("mvd.instrumentation.agent.maxEvents must be between 1 and 2147483647: 2147483648",
+                ReportConfig.MAX_EVENTS_PROPERTY, "2147483648");
+    }
+
+    @Test
+    public void errorMessagesNameThePropertyAndValue() {
+        assertMessage("mvd.instrumentation.agent.threshold must be at least 0: -5", ReportConfig.THRESHOLD_PROPERTY, "-5");
+        assertMessage("mvd.instrumentation.agent.maxEvents must be an integer: lots", ReportConfig.MAX_EVENTS_PROPERTY, "lots");
+    }
+
+    private static void assertMessage(String expected, String property, String value) {
+        try {
+            config(property, value);
+            fail("expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertEquals(expected, e.getMessage());
+        }
     }
 
     @Test

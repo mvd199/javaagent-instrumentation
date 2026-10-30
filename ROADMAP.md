@@ -7,14 +7,16 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 ## Progress Overview
 
 - [x] **1. Exception Handling in Instrumented Methods** *(High Priority / Bug Fix)*
-- [ ] **2. Configurable Duration Threshold** *(High Priority / Usability)*
-- [ ] **3. Wildcard & Package Prefix Matching** *(High Priority / Usability)*
+- [x] **2. Configurable Duration Threshold** *(High Priority / Usability)*
+- [x] **3. Wildcard & Package Prefix Matching** *(High Priority / Usability)*
 - [ ] **4. Shaded Dependency Relocation** *(Medium Priority / Safety)*
 - [x] **5. Call Depth & Hierarchy Indentation** *(Medium Priority / UX)*
 - [x] **6. Structured & Configurable Output Format (JSON / Sinks)** *(Medium Priority / UX)*
 - [ ] **7. Support for Modern Java Editions & Tooling** *(Long-term / Modernization)*
 - [ ] **8. Dynamic JVM Attachment (`agentmain`)** *(Long-term / Advanced)*
-- [ ] **9.** Cleanup console.out everywhere, we can use instead a minimal logger with levels. Example: https://github.com/mvd199/javaagent-instrumentation/blob/d3e30585aa98640a81f73495faa70b0de081f3d5/src/main/java/mvd/instrumentation/DurationTransformer.java#L57
+- [ ] **9. Fix Agent Loading & Classloader Isolation** *(Medium Priority / Architecture)*
+- [x] **10. Internal Agent Logging Facility & System Property Namespace Cleanup** *(Medium Priority / Usability)*
+- [ ] **11. Agent Overhead Benchmarks & Performance Regression Gates** *(High Priority / Performance)*
 
 ---
 
@@ -35,31 +37,33 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 ---
 
 ### 2. Configurable Duration Threshold
-* **Status**: Open
+* **Status**: Completed
 * **Priority**: High (Usability)
-* **Problem**: The 50 millisecond threshold is hardcoded as `private static final int MINIMAL_INVOCATION_TIME_MILLIS = 50` in [`DurationAgent.java`](src/main/java/mvd/instrumentation/DurationAgent.java). Users cannot tune the threshold for different performance profiling needs without recompiling.
-* **Proposed Solution**:
-  * Support passing threshold via agent arguments:
-    * Format: `-javaagent:agent.jar=classes.cfg;threshold=100` or `-javaagent:agent.jar=classes.cfg,threshold=100`.
-  * Support fallback to a system property: `-Dduration.threshold=100`.
-  * Fall back to default (50ms) if not specified or invalid.
+* **Problem**: The 50 millisecond threshold was hardcoded as `private static final int MINIMAL_INVOCATION_TIME_MILLIS = 50` in [`DurationAgent.java`](src/main/java/mvd/instrumentation/DurationAgent.java). Users could not tune the threshold for different performance profiling needs without recompiling.
+* **Implemented Solution**:
+  * Configured via system property: `-Dmvd.instrumentation.agent.threshold=<ms>` (e.g. `-Dmvd.instrumentation.agent.threshold=100`).
+  * Integrated directly into [`ReportConfig.java`](src/main/java/mvd/instrumentation/ReportConfig.java), keeping `agentArgs` dedicated solely to the configuration file path without brittle custom delimiter parsing.
+  * Defaults to `50` ms if not specified. Non-numeric or negative values stop the agent at startup with an `IllegalArgumentException`, like the other properties.
+  * Caps values exceeding `180_000` ms (3 minutes) to 180,000 ms with a warning, so an accidental huge value (e.g. a day) cannot silently disable recording.
 * **Acceptance Criteria**:
-  * Parsing accepts configuration file path + optional threshold.
-  * Invocations taking between `1` and `N` ms are logged according to the configured threshold.
-  * Unit tests cover argument parsing with valid, invalid, and missing thresholds.
+  * Setting `-Dmvd.instrumentation.agent.threshold` adjusts the minimum execution duration recorded by `Recorder`.
+  * Unit tests cover missing, valid, zero, capped, negative, and non-numeric thresholds.
 
 ---
 
 ### 3. Wildcard & Package Prefix Matching
-* **Status**: Open
+* **Status**: Completed
 * **Priority**: High (Usability)
-* **Problem**: [`classes.cfg`](classes.cfg) currently requires listing every individual fully qualified class name. There is no support for package wildcards (e.g. `com.example.service.*` or `com.example.**`). In addition, blank lines and comment lines (`# ...`) in `classes.cfg` are not filtered, causing empty strings to be added to the whitelist.
-* **Proposed Solution**:
-  * Ignore blank lines, trailing/leading whitespace, and `#` comments when reading `classes.cfg`.
-  * Convert whitelist entries into predicates supporting:
-    * Exact match: `com.example.Foo`
-    * Single-level wildcard: `com.example.*` (matches direct classes in package)
-    * Recursive prefix wildcard: `com.example.**` (matches all subpackages)
+* **Problem**: [`classes.cfg`](classes.cfg) previously required listing every individual fully qualified class name. There was no support for package wildcards (e.g. `com.example.service.*` or `com.example.**`). In addition, blank lines and comment lines (`# ...`) in `classes.cfg` were not filtered, causing empty strings to be added to the whitelist.
+* **Implemented Solution**:
+  * Implemented [`ClassFilter.java`](src/main/java/mvd/instrumentation/ClassFilter.java) implementing `Predicate<String>` with fast-path, zero-heap-allocation evaluation:
+    * Exact match: `com.example.Foo` via `Set<String>` lookup.
+    * Single-level wildcard: `com.example.*` via string prefix match (`com/example/`) + ensuring no further `/` delimiter.
+    * Recursive prefix wildcard: `com.example.**` via package prefix match (`com/example/`).
+    * General globs: fallback to compiled `java.util.regex.Pattern`.
+  * Sanitizes configuration inputs by stripping full-line and inline `#` comments, trimming whitespace, and ignoring empty/blank lines.
+  * Never matches JDK (`java/`, `javax/`, `jdk/`, `sun/`, `com/sun/`), javassist or agent classes, and rejects a bare `**`; a pattern covering excluded classes logs a warning. `DurationTransformer` also skips bootstrap-loaded classes. Instrumenting those classes aborted JVM startup (`**`) or silently lost the report (`java.util.**`), because they cannot see the agent classes the instrumentation calls.
+  * Added JMH microbenchmark suite ([`ClassFilterBenchmark.java`](src/test/java/mvd/instrumentation/ClassFilterBenchmark.java)) runnable via `make bench`, showing nanosecond-range evaluation (`~4.7ns` for exact match hits, `~6.5ns` for recursive wildcard hits, `~6.8ns` for JDK class misses).
 * **Acceptance Criteria**:
   * Classes in matched subpackages are instrumented without listing each class individually.
   * Blank lines and `#` comments in `classes.cfg` do not break instrumentation.
@@ -148,6 +152,68 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 * **Acceptance Criteria**:
   * The agent JAR can be attached to a running JVM via `jcmd <pid> JVMTI.agent_load <jar>=classes.cfg` or the Attach API without restarting the process.
 
-### 9. Fix agent loading 
-Pre-existing, not from this PR: the DurationTransformer constructor sets a static callback, so creating a second transformer replaces the first one’s callback.
-Instrumented code also only works if its classloader can see the agent classes.
+---
+
+### 9. Fix Agent Loading & Classloader Isolation
+* **Status**: Open
+* **Priority**: Medium (Architecture / Reliability)
+* **Problem**: 
+  * The `DurationTransformer` constructor currently sets a static callback (`registerStartTimeFunction = registerFunction`), so instantiating a second transformer replaces the first one’s callback.
+  * Instrumented code only works if its classloader can see the agent classes. If classes are loaded in isolated child classloaders (e.g. plugins, OSGi, application containers), attempting to invoke `DurationTransformer.pushStartTime()` results in `NoClassDefFoundError` or `ClassNotFoundException`.
+* **Proposed Solution**:
+  * Replace static callback assignment with an instance-safe registry or lookup mechanism.
+  * Append agent runtime classes to the bootstrap classloader search path via `Instrumentation.appendToBootstrapClassLoaderSearch(jarFile)`.
+* **Acceptance Criteria**:
+  * Multiple transformer instances operate without clobbering each other's callbacks.
+  * Classes in isolated child classloaders execute instrumented methods without `NoClassDefFoundError`.
+
+---
+
+### 10. Internal Agent Logging Facility & System Property Namespace Cleanup
+* **Status**: Completed
+* **Priority**: Medium (Usability / Robustness)
+* **Problem**: 
+  * Diagnostic and error output was scattered across the codebase using `System.out.println`, `System.err.println`, and raw `e.printStackTrace()`.
+  * `DurationTransformer` unconditionally logged `Transforming: <className>` to `System.out` during classloading, polluting application output and interfering with stdout report redirection.
+  * System properties used the generic `duration.*` prefix (`duration.format`, `duration.output`, `duration.maxEvents`), risking global collisions.
+* **Implemented Solution**:
+  * Introduced `AgentLogger`: a lightweight, zero-dependency diagnostic logger supporting log levels (`OFF`, `ERROR`, `WARN`, `INFO`, `DEBUG`).
+  * Implemented monotonic elapsed time timestamping (`[+<ms>ms]`) using `System.nanoTime()` relative to agent initialization.
+  * Transformation logs downgraded to `DEBUG` level (silent by default under `INFO`).
+  * Diagnostic logs default to `System.err`, keeping them out of profiling reports written to `System.out` (e.g. JSON reports).
+  * System properties structured into clean functional namespaces under `mvd.instrumentation.*`:
+    * Core agent logic: `mvd.instrumentation.agent.threshold`, `mvd.instrumentation.agent.maxEvents`
+    * Report configuration: `mvd.instrumentation.report.format`, `mvd.instrumentation.report.output`
+    * Diagnostic logging: `mvd.instrumentation.log.level`
+  * The old `duration.*` names are no longer read; the README has a migration table.
+* **Acceptance Criteria**:
+  * Bytecode transformation logging is suppressed by default (`INFO`) and enabled when `mvd.instrumentation.log.level=DEBUG`.
+  * Profiling reports on `stdout` are not corrupted by internal agent diagnostic messages.
+  * System properties are cleanly namespaced under `mvd.instrumentation.{agent,report,log}.*`.
+  * Unit tests cover all log levels, timestamp formatting, exception formatting, and property configuration.
+
+---
+
+### 11. Agent Overhead Benchmarks & Performance Regression Gates
+* **Status**: Open
+* **Priority**: High (Performance)
+* **Problem**:
+  * The only benchmark ([`ClassFilterBenchmark.java`](src/test/java/mvd/instrumentation/ClassFilterBenchmark.java)) measures `ClassFilter.test`, which runs once per class load and is not on the critical path. The cost users actually pay runs on every call to every instrumented method: `pushStartTime()` (`ThreadLocal` lookup, `System.nanoTime()`, stack push), `popAndRegisterStartTime()`, and the fast rejection of calls under the threshold in `Recorder.record`. The injected `try/finally` also grows each instrumented method, which can stop the JIT from inlining it.
+  * `make bench` runs JMH through `exec:java` with `@Fork(0)`. JMH warns that non-forked results are only good for debugging, and this setup cannot attach the agent (`-javaagent`) to the benchmark JVM. The figures quoted in item 3 come from these runs.
+  * Nothing detects performance regressions: there is no allocation check, no limit on injected bytecode size, and no benchmark in CI.
+  * `ClassFilter` can regress badly too. A review refactor that compiled every pattern into one regex made `test()` about 50x slower (12 ns to 600 ns per class) and went unnoticed until `make bench` was run by hand. It was reverted to the hash-set and prefix fast paths before merging.
+* **Proposed Solution**:
+  * **Deterministic gates** (stable, can fail the build on every PR):
+    * Assert that the under-threshold path allocates 0 bytes per call, via JMH `-prof gc` (`gc.alloc.rate.norm`) or a JUnit test around `ThreadMXBean.getThreadAllocatedBytes()` (it counts bytes, not time, so it is not affected by machine load).
+    * Cap the bytecode the transformer adds per method (instrumented minus original size), to protect JIT inlining.
+  * **Overhead-per-call JMH benchmark**: the same small method called without the agent and with it, attached via `@Fork(jvmArgsAppend = "-javaagent:...")`, so the real javassist-generated code is measured. Cover the under-threshold path, the recorded path, and nested calls.
+  * **Proper JMH runs**: `make bench` runs JMH's own `Main` with the test classpath (or a benchmark JAR) and forks by default (`@Fork(2)` or more); results can be written as JSON (`-rf json`). Benchmarks stay runnable on demand.
+  * **`make perf` and a separate CI job**: `make test` stays fast for the dev cycle. `make perf` runs a short JMH configuration (1 fork, 1 warmup and 3 measured rounds of 1 s, ~30 s in total) and fails on regressions; CI runs it on every PR as its own job, in parallel with `test`.
+  * **Per-benchmark limits, not total time**: JMH runs each benchmark for a fixed time, so total suite time stays the same however slow the code gets. Each benchmark gets its own limit: 2x its baseline, or 3x for benchmarks under 10 ns where timer noise dominates. The baseline is either a reference benchmark in the same run (e.g. a `HashSet` lookup, so machine speed cancels out) or master on the same runner (below). This covers `ClassFilterBenchmark`, including a 0 bytes/op allocation check for `ClassFilter.test`.
+  * **CI timing check, master vs PR on the same runner**: one job builds both master and the PR and runs the same benchmarks back to back, failing only when the slowdown exceeds a set percentage (e.g. 10–15%) and is larger than JMH's error range. Comparing against stored numbers from other machines is avoided, because shared GitHub runners vary by ~5–10%. Runs on PRs touching `src/main` and nightly on master. Optionally publish trends with `benchmark-action/github-action-benchmark`; tighter thresholds would need a dedicated self-hosted runner.
+* **Acceptance Criteria**:
+  * A test fails if the under-threshold path of an instrumented call allocates.
+  * A test fails if the bytecode injected per method grows beyond the agreed limit.
+  * `make bench` runs forked JMH benchmarks that report per-call overhead with and without the agent.
+  * A CI workflow compares PR and master benchmark results on the same runner and fails on a regression above the threshold.
+  * `make perf` fails when any benchmark, `ClassFilterBenchmark` included, exceeds its limit (2x baseline, 3x under 10 ns) or when `ClassFilter.test` allocates; CI runs it on every PR. `make test` does not run benchmarks.

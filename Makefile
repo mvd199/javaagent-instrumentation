@@ -10,7 +10,7 @@ DOCKER_RUN = docker run --rm \
 	-e MAVEN_CONFIG=/var/maven/.m2 -e MAVEN_OPTS=-Duser.home=/var/maven -v "$(M2_CACHE)":/var/maven/.m2 \
 	$(IMAGE)
 
-.PHONY: all check-docker test package clean compile demo help
+.PHONY: all check-docker test package clean compile demo bench help
 
 all: test
 
@@ -34,14 +34,18 @@ demo: check-docker
 	$(DOCKER_RUN) mvn test-compile package -DskipTests -B
 	$(DOCKER_RUN) java $(JAVA_OPTS) -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=demo.cfg \
 		-cp target/test-classes:target/classes \
-		mvd.instrumentation.demo.DemoApp
+		mvd.demo.DemoApp
+
+bench: check-docker
+	$(DOCKER_RUN) mvn test-compile exec:java -Dexec.mainClass="mvd.instrumentation.ClassFilterBenchmark" $(ARGS)
 
 help:
 	@echo "Available targets:"
 	@echo "  make         - Run unit tests (default)"
 	@echo "  make test    - Run unit tests (pass ARGS='-Dtest=...' for specific test)"
 	@echo "  make package - Build the shaded agent JAR"
-	@echo "  make demo    - Build and run the interactive showcase demo (pass JAVA_OPTS='-Dduration.format=json')"
+	@echo "  make bench   - Run JMH microbenchmarks for ClassFilter"
+	@echo "  make demo    - Build and run the interactive showcase demo (pass JAVA_OPTS='-Dmvd.instrumentation.report.format=json')"
 	@echo "  make clean   - Clean the build artifacts"
 	@echo "  make compile - Compile main source files"
 

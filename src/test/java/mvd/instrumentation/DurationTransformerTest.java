@@ -18,6 +18,7 @@ import static org.junit.Assert.fail;
 
 public class DurationTransformerTest {
     private static final String TARGET = "mvd/instrumentation/SampleTarget";
+    private static final ClassLoader LOADER = DurationTransformerTest.class.getClassLoader();
 
     private final List<String> reportedMethods = new ArrayList<>();
     private final List<Long> reportedStartTimes = new ArrayList<>();
@@ -32,6 +33,13 @@ public class DurationTransformerTest {
     public void returnsNullForClassesOutsideWhitelist() throws Exception {
         DurationTransformer transformer = transformerAllowing(name -> false);
 
+        assertNull(transformer.transform(LOADER, TARGET, null, null, classBytes(TARGET)));
+    }
+
+    @Test
+    public void returnsNullForBootstrapClasses() throws Exception {
+        DurationTransformer transformer = transformerAllowing(name -> true);
+
         assertNull(transformer.transform(null, TARGET, null, null, classBytes(TARGET)));
     }
 
@@ -39,21 +47,21 @@ public class DurationTransformerTest {
     public void returnsNullForInterface() throws Exception {
         String name = "mvd/instrumentation/SampleInterface";
 
-        assertNull(transformerAllowing(name::equals).transform(null, name, null, null, classBytes(name)));
+        assertNull(transformerAllowing(name::equals).transform(LOADER, name, null, null, classBytes(name)));
     }
 
     @Test
     public void returnsNullForEnum() throws Exception {
         String name = "mvd/instrumentation/SampleEnum";
 
-        assertNull(transformerAllowing(name::equals).transform(null, name, null, null, classBytes(name)));
+        assertNull(transformerAllowing(name::equals).transform(LOADER, name, null, null, classBytes(name)));
     }
 
     @Test
     public void returnsModifiedBytecodeForWhitelistedClass() throws Exception {
         byte[] original = classBytes(TARGET);
 
-        byte[] transformed = transformerAllowing(TARGET::equals).transform(null, TARGET, null, null, original);
+        byte[] transformed = transformerAllowing(TARGET::equals).transform(LOADER, TARGET, null, null, original);
 
         assertNotNull(transformed);
         assertTrue("Bytecode should grow after instrumentation", transformed.length > original.length);
@@ -228,7 +236,7 @@ public class DurationTransformerTest {
 
     private Object instrumentedInstance(DurationCallback callback) throws Exception {
         byte[] transformed = new DurationTransformer(TARGET::equals, callback)
-                .transform(null, TARGET, null, null, classBytes(TARGET));
+                .transform(LOADER, TARGET, null, null, classBytes(TARGET));
         assertNotNull(transformed);
         return new SingleClassLoader(TARGET.replace('/', '.'), transformed, getClass().getClassLoader())
                 .loadClass(TARGET.replace('/', '.'))

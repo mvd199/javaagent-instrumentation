@@ -7,8 +7,6 @@ import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.nio.file.Files;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
 
 import java.nio.charset.StandardCharsets;
 
@@ -19,37 +17,20 @@ public class DurationAgentTest {
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
-    @Test(expected = IllegalArgumentException.class)
-    public void whitelistRejectsNullArgs() {
-        DurationAgent.createWhitelist(null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void whitelistRejectsEmptyArgs() {
-        DurationAgent.createWhitelist("");
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void whitelistRejectsMissingFile() {
-        DurationAgent.createWhitelist(new File(folder.getRoot(), "missing.cfg").getPath());
-    }
-
     @Test
-    public void whitelistConvertsClassNamesToInternalForm() throws Exception {
+    public void createClassFilterBuildsFunctionalFilterFromFile() throws Exception {
         File config = folder.newFile("classes.cfg");
-        Files.write(config.toPath(), Arrays.asList("com.example.Foo", "com.example.sub.Bar"));
+        Files.write(config.toPath(), Arrays.asList(
+                "# Whitelist configuration",
+                "com.example.service.*",
+                "com.example.repo.**"
+        ));
 
-        Set<String> whitelist = DurationAgent.createWhitelist(config.getPath());
+        ClassFilter filter = DurationAgent.createClassFilter(config.getPath());
 
-        assertEquals(new HashSet<>(Arrays.asList("com/example/Foo", "com/example/sub/Bar")), whitelist);
-    }
-
-    @Test
-    public void whitelistIgnoresDuplicates() throws Exception {
-        File config = folder.newFile("classes.cfg");
-        Files.write(config.toPath(), Arrays.asList("com.example.Foo", "com.example.Foo"));
-
-        assertEquals(1, DurationAgent.createWhitelist(config.getPath()).size());
+        assertTrue(filter.test("com/example/service/OrderService"));
+        assertTrue(filter.test("com/example/repo/jpa/UserRepo"));
+        assertEquals(false, filter.test("com/other/Foo"));
     }
 
     @Test
@@ -134,9 +115,39 @@ public class DurationAgentTest {
             DurationAgent.writeReport(recorder, config);
 
             String errOutput = errBytes.toString();
-            assertTrue(errOutput, errOutput.contains("DurationAgent: dropped 1 calls exceeding maxEvents (1)"));
+            assertTrue(errOutput, errOutput.contains("DurationAgent:"));
+            assertTrue(errOutput, errOutput.contains("[WARN]"));
+            assertTrue(errOutput, errOutput.contains("dropped 1 calls exceeding maxEvents (1)"));
         } finally {
             System.setErr(originalErr);
         }
+    }
+
+    @Test
+    public void recorderFiltersInvocationsAccordingToConfiguredThreshold() {
+        ReportConfig customConfig = ReportConfig.from(property -> {
+            if (ReportConfig.THRESHOLD_PROPERTY.equals(property)) {
+                return "20";
+            }
+            return null;
+        });
+        assertEquals(20L, customConfig.threshold);
+
+        Recorder customRecorder = new Recorder(customConfig.threshold, 10, () -> 0);
+        // Call taking 10ms: under 20ms threshold, should not be recorded
+        customRecorder.record("a.B.fast()", System.nanoTime() - 10_000_000L);
+        assertEquals(0, customRecorder.snapshot().records.size());
+
+        // Call taking 30ms: over 20ms threshold, should be recorded
+        customRecorder.record("a.B.medium()", System.nanoTime() - 30_000_000L);
+        assertEquals(1, customRecorder.snapshot().records.size());
+        assertEquals("a.B.medium()", customRecorder.snapshot().records.get(0).method);
+
+        // Same 30ms call with default 50ms threshold should not be recorded
+        ReportConfig defaultConfig = ReportConfig.from(property -> null);
+        assertEquals(50L, defaultConfig.threshold);
+        Recorder defaultRecorder = new Recorder(defaultConfig.threshold, 10, () -> 0);
+        defaultRecorder.record("a.B.medium()", System.nanoTime() - 30_000_000L);
+        assertEquals(0, defaultRecorder.snapshot().records.size());
     }
 }
