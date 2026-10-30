@@ -53,36 +53,46 @@ final class ReportConfig {
             throw new IllegalArgumentException("Unknown " + FORMAT_PROPERTY + ": " + format + " (expected summary or json)");
         }
         String output = valueOrDefault(properties.apply(OUTPUT_PROPERTY), DEFAULT_OUTPUT);
-        int maxEvents = DEFAULT_MAX_EVENTS;
-        String rawMax = properties.apply(MAX_EVENTS_PROPERTY);
-        if (rawMax != null && !rawMax.trim().isEmpty()) {
-            try {
-                maxEvents = Integer.parseInt(rawMax.trim());
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(MAX_EVENTS_PROPERTY + " must be a positive integer: " + rawMax);
-            }
-            if (maxEvents <= 0) {
-                throw new IllegalArgumentException(MAX_EVENTS_PROPERTY + " must be a positive integer: " + rawMax);
-            }
-        }
-        long threshold = DEFAULT_THRESHOLD;
-        String rawThreshold = properties.apply(THRESHOLD_PROPERTY);
-        if (rawThreshold != null && !rawThreshold.trim().isEmpty()) {
-            try {
-                threshold = Long.parseLong(rawThreshold.trim());
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(THRESHOLD_PROPERTY + " must be a non-negative integer: " + rawThreshold);
-            }
-            if (threshold < 0) {
-                throw new IllegalArgumentException(THRESHOLD_PROPERTY + " must be a non-negative integer: " + rawThreshold);
-            }
-            if (threshold > MAX_THRESHOLD) {
-                AgentLogger.warn(THRESHOLD_PROPERTY + " (" + threshold + " ms) exceeds maximum limit of "
-                        + MAX_THRESHOLD + " ms (3 minutes); capping to " + MAX_THRESHOLD + " ms.");
-                threshold = MAX_THRESHOLD;
-            }
-        }
+        int maxEvents = parsePositiveInt(properties, MAX_EVENTS_PROPERTY, DEFAULT_MAX_EVENTS);
+        long threshold = parseThreshold(properties);
         return new ReportConfig(format, output, maxEvents, threshold);
+    }
+
+    private static int parsePositiveInt(Function<String, String> properties, String name, int defaultValue) {
+        String raw = properties.apply(name);
+        if (raw == null || raw.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            int value = Integer.parseInt(raw.trim());
+            if (value > 0) {
+                return value;
+            }
+        } catch (NumberFormatException ignored) {
+            // Reported below
+        }
+        throw new IllegalArgumentException(name + " must be a positive integer: " + raw);
+    }
+
+    private static long parseThreshold(Function<String, String> properties) {
+        String raw = properties.apply(THRESHOLD_PROPERTY);
+        if (raw == null || raw.trim().isEmpty()) {
+            return DEFAULT_THRESHOLD;
+        }
+        try {
+            long threshold = Long.parseLong(raw.trim());
+            if (threshold > MAX_THRESHOLD) {
+                AgentLogger.LOG.warn(THRESHOLD_PROPERTY + " (" + threshold + " ms) exceeds maximum limit of "
+                        + MAX_THRESHOLD + " ms (3 minutes); capping to " + MAX_THRESHOLD + " ms.");
+                return MAX_THRESHOLD;
+            }
+            if (threshold >= 0) {
+                return threshold;
+            }
+        } catch (NumberFormatException ignored) {
+            // Reported below
+        }
+        throw new IllegalArgumentException(THRESHOLD_PROPERTY + " must be a non-negative integer: " + raw);
     }
 
     Reporter reporter() {

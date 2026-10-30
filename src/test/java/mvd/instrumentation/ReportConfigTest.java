@@ -52,13 +52,14 @@ public class ReportConfigTest {
     @Test
     public void capsThresholdExceedingMaxLimitAndLogsWarning() {
         java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
-        AgentLogger.setTargetStream(new java.io.PrintStream(errBytes));
+        java.io.PrintStream originalErr = System.err;
+        System.setErr(new java.io.PrintStream(errBytes));
         try {
             ReportConfig config = config(ReportConfig.THRESHOLD_PROPERTY, "86400000");
 
             assertEquals(ReportConfig.MAX_THRESHOLD, config.threshold);
         } finally {
-            AgentLogger.reset();
+            System.setErr(originalErr);
         }
         String err = errBytes.toString();
         assertTrue(err, err.contains("[WARN] " + ReportConfig.THRESHOLD_PROPERTY

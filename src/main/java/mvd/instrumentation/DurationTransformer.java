@@ -28,7 +28,9 @@ public class DurationTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className,
                             Class<?> classBeingRedefined, ProtectionDomain protectionDomain,
                             byte[] classfileBuffer) throws IllegalClassFormatException {
-        // Bootstrap classes cannot see the agent classes that the instrumentation calls.
+        // A null loader is the bootstrap loader. The injected code calls DurationTransformer, which is on the
+        // system class path where bootstrap classes cannot see it, so it would throw NoClassDefFoundError.
+        // ClassFilter's excluded prefixes cover most of these too, but not classes added with -Xbootclasspath/a.
         if (loader == null || !allowTransformationPredicate.test(className)) {
             return null;
         }
@@ -55,14 +57,12 @@ public class DurationTransformer implements ClassFileTransformer {
             }
 
             if (isClassModified) {
-                if (AgentLogger.isDebugEnabled()) {
-                    AgentLogger.debug("Transforming: " + className);
-                }
+                AgentLogger.LOG.debug(() -> "Transforming: " + className);
                 result = ctClass.toBytecode();
             }
             ctClass.detach();
         } catch (Throwable e) {
-            AgentLogger.error("Failed to transform class: " + className, e);
+            AgentLogger.LOG.error("Failed to transform class: " + className, e);
         }
         return result;
     }

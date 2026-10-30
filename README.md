@@ -137,7 +137,6 @@ The report is buffered in memory and written once, when the JVM exits. Configure
 | **Report** | `mvd.instrumentation.report.format` | `summary`, `json` | `summary` | Report output format (`summary` table and call tree, or JSON lines) |
 | **Report** | `mvd.instrumentation.report.output` | `stdout`, `stderr`, file path | `stdout` | Profiling report destination |
 | **Logging** | `mvd.instrumentation.log.level` | `OFF`, `ERROR`, `WARN`, `INFO`, `DEBUG` | `INFO` | Internal agent diagnostic log level |
-| **Logging** | `mvd.instrumentation.log.output` | `stderr`, `stdout` | `stderr` | Internal agent diagnostic log destination |
 
 ```bash
 java -Dmvd.instrumentation.agent.threshold=100 \
@@ -147,7 +146,11 @@ java -Dmvd.instrumentation.agent.threshold=100 \
      -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg -jar your-app.jar
 ```
 
-Each JSON line looks like `{"timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is the number of instrumented methods on the same thread that were still running when the call was made. If slow calls exceed `mvd.instrumentation.agent.maxEvents`, the number of dropped calls appears in the `summary` report header, or is logged as a warning to `stderr` for `json`. Property values like format and stdout/stderr are case-insensitive, and missing parent directories for file paths are created automatically. The report is not written if the JVM is killed with `kill -9`. Agent diagnostic logs (e.g. `[+12ms] [DEBUG] Transforming: ...`) default to `stderr` and are kept separate from profiler reports (`mvd.instrumentation.report.output`) so they don't mix with the report unless you set `mvd.instrumentation.log.output=stdout` while the report also goes to `stdout`. An invalid value (unknown format, non-numeric or negative number) stops the JVM at startup with an error naming the property.
+- **JSON lines:** each line looks like `{"timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is how many instrumented calls were still running on the same thread.
+- **Dropped calls:** calls beyond `mvd.instrumentation.agent.maxEvents` are counted, and the count appears in the `summary` header (or as a warning on `stderr` for `json`).
+- **Invalid values** (unknown format, non-numeric or negative number) stop the JVM at startup with an error naming the property.
+- **Diagnostic logs** (e.g. `[+12ms] [DEBUG] Transforming: ...`) always go to `stderr`, so they never mix with the report.
+- **No report on `kill -9`:** it is written by a shutdown hook.
 
 #### Upgrading from `duration.*` properties
 All properties moved under the `mvd.instrumentation.` prefix. The old names are no longer read: if you still pass them, they are ignored and the defaults apply, so update your startup flags.

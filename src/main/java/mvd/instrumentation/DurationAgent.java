@@ -21,7 +21,7 @@ public class DurationAgent {
     static void writeReport(Recorder recorder, ReportConfig config) {
         Report report = recorder.snapshot();
         if (report.dropped > 0 && "json".equals(config.format)) {
-            AgentLogger.warn("dropped " + report.dropped + " calls exceeding maxEvents (" + config.maxEvents + ")");
+            AgentLogger.LOG.warn("dropped " + report.dropped + " calls exceeding maxEvents (" + config.maxEvents + ")");
         }
         PrintWriter out = null;
         boolean error = false;
@@ -31,7 +31,7 @@ public class DurationAgent {
                 error = true;
             }
         } catch (IOException | RuntimeException e) {
-            AgentLogger.error("failed to write report to " + config.output, e);
+            AgentLogger.LOG.error("failed to write report to " + config.output, e);
             return;
         } finally {
             if (out != null) {
@@ -42,7 +42,7 @@ public class DurationAgent {
             }
         }
         if (error) {
-            AgentLogger.error("report to " + config.output + " may be incomplete (write error)");
+            AgentLogger.LOG.error("report to " + config.output + " may be incomplete (write error)");
         }
     }
 

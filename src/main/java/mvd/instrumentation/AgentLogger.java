@@ -2,142 +2,84 @@ package mvd.instrumentation;
 
 import java.io.PrintStream;
 import java.util.Locale;
-import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Lightweight, zero-dependency diagnostic logger for DurationAgent.
  *
- * <p>Diagnostic logs are kept separate from profiler report output to prevent corrupting
- * structured output formats (e.g. JSON lines on stdout). All diagnostic logs default to
- * {@code System.err}, stamped with the time elapsed since this class was initialized (in practice,
- * shortly after agent startup).
+ * <p>Diagnostic logs go to {@code System.err}, so they never mix with a profiler report written to stdout.
+ * Each line is stamped with the time elapsed since the logger was created (in practice, shortly after
+ * agent startup).
  */
 final class AgentLogger {
-    public enum Level {
-        OFF(0),
-        ERROR(1),
-        WARN(2),
-        INFO(3),
-        DEBUG(4);
+    enum Level {
+        OFF, ERROR, WARN, INFO, DEBUG;
 
-        final int severity;
-
-        Level(int severity) {
-            this.severity = severity;
-        }
-
-        public static Level fromString(String val, Level defaultLevel) {
-            if (val == null || val.trim().isEmpty()) {
+        static Level parse(String value, Level defaultLevel) {
+            if (value == null || value.trim().isEmpty()) {
                 return defaultLevel;
             }
             try {
-                return Level.valueOf(val.trim().toUpperCase(Locale.ROOT));
+                return valueOf(value.trim().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException e) {
                 return defaultLevel;
             }
         }
     }
 
-    public static final String LOG_LEVEL_PROPERTY = "mvd.instrumentation.log.level";
-    public static final String LOG_OUTPUT_PROPERTY = "mvd.instrumentation.log.output";
+    static final String LEVEL_PROPERTY = "mvd.instrumentation.log.level";
 
-    private static volatile long startTimeNanos = System.nanoTime();
-    private static volatile Level currentLevel = Level.INFO;
-    private static volatile boolean useStdout = false;
-    private static volatile PrintStream customStream = null;
+    static final AgentLogger LOG = new AgentLogger(
+            Level.parse(System.getProperty(LEVEL_PROPERTY), Level.INFO), System.nanoTime());
 
-    static {
-        initFromProperties(System::getProperty);
+    private final Level level;
+    private final long startNanos;
+
+    AgentLogger(Level level, long startNanos) {
+        this.level = level;
+        this.startNanos = startNanos;
     }
 
-    private AgentLogger() {
+    /** The message is only built when DEBUG is enabled. */
+    void debug(Supplier<String> message) {
+        if (enabled(Level.DEBUG)) {
+            log(Level.DEBUG, message.get(), null);
+        }
     }
 
-    static void initFromProperties(Function<String, String> properties) {
-        String lvlStr = properties.apply(LOG_LEVEL_PROPERTY);
-        currentLevel = Level.fromString(lvlStr, Level.INFO);
-
-        String outStr = properties.apply(LOG_OUTPUT_PROPERTY);
-        useStdout = outStr != null && "stdout".equalsIgnoreCase(outStr.trim());
-        customStream = null;
-    }
-
-    public static Level getLevel() {
-        return currentLevel;
-    }
-
-    public static boolean isDebugEnabled() {
-        return currentLevel.severity >= Level.DEBUG.severity;
-    }
-
-    public static boolean isInfoEnabled() {
-        return currentLevel.severity >= Level.INFO.severity;
-    }
-
-    public static boolean isWarnEnabled() {
-        return currentLevel.severity >= Level.WARN.severity;
-    }
-
-    public static boolean isErrorEnabled() {
-        return currentLevel.severity >= Level.ERROR.severity;
-    }
-
-    public static void debug(String message) {
-        log(Level.DEBUG, message, null);
-    }
-
-    public static void info(String message) {
+    void info(String message) {
         log(Level.INFO, message, null);
     }
 
-    public static void warn(String message) {
+    void warn(String message) {
         log(Level.WARN, message, null);
     }
 
-    public static void error(String message) {
+    void error(String message) {
         log(Level.ERROR, message, null);
     }
 
-    public static void error(String message, Throwable throwable) {
+    void error(String message, Throwable throwable) {
         log(Level.ERROR, message, throwable);
     }
 
-    private static void log(Level level, String message, Throwable throwable) {
-        if (currentLevel.severity >= level.severity) {
-            long elapsedMs = (System.nanoTime() - startTimeNanos) / 1_000_000L;
-            if (elapsedMs < 0) {
-                elapsedMs = 0;
-            }
-            PrintStream out = resolveStream();
-            out.println("DurationAgent: [+" + elapsedMs + "ms] [" + level + "] " + message);
+    private boolean enabled(Level messageLevel) {
+        return level.compareTo(messageLevel) >= 0;
+    }
+
+    private void log(Level messageLevel, String message, Throwable throwable) {
+        if (!enabled(messageLevel)) {
+            return;
+        }
+        long elapsedMs = Math.max(0, (System.nanoTime() - startNanos) / 1_000_000L);
+        // Resolved at call time so a redirected System.err is honoured.
+        PrintStream out = System.err;
+        // Keeps the message and its stack trace together when several threads log at once.
+        synchronized (out) {
+            out.println("DurationAgent: [+" + elapsedMs + "ms] [" + messageLevel + "] " + message);
             if (throwable != null) {
                 throwable.printStackTrace(out);
             }
         }
-    }
-
-    private static PrintStream resolveStream() {
-        if (customStream != null) {
-            return customStream;
-        }
-        return useStdout ? System.out : System.err;
-    }
-
-    // Testing helpers
-    static void setLevel(Level level) {
-        currentLevel = level != null ? level : Level.INFO;
-    }
-
-    static void setTargetStream(PrintStream stream) {
-        customStream = stream;
-    }
-
-    static void setStartTimeNanos(long nanos) {
-        startTimeNanos = nanos;
-    }
-
-    static void reset() {
-        startTimeNanos = System.nanoTime();
-        initFromProperties(System::getProperty);
     }
 }

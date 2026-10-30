@@ -21,12 +21,12 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * JMH microbenchmark measuring the execution latency of {@link ClassFilter#test(String)}
- * across common matching scenarios:
+ * across common matching scenarios.
  * <ul>
- *   <li>Hit on exact match (O(1) HashSet lookup)</li>
- *   <li>Hit on single-level package wildcard (prefix check + delimiter check)</li>
- *   <li>Hit on recursive package wildcard (prefix check)</li>
- *   <li>Miss on non-whitelisted JDK class (e.g. java/lang/String)</li>
+ *   <li>Hit on exact match</li>
+ *   <li>Hit on single-level package wildcard</li>
+ *   <li>Hit on recursive package wildcard</li>
+ *   <li>Miss on excluded JDK class (e.g. java/lang/String)</li>
  *   <li>Miss on sibling package (e.g. com/example2 vs com/example)</li>
  * </ul>
  */

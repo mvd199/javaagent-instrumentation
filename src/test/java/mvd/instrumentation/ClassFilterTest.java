@@ -5,14 +5,17 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
-import java.io.StringReader;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.PathMatcher;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 public class ClassFilterTest {
 
@@ -158,11 +161,12 @@ public class ClassFilterTest {
     @Test
     public void warnsAboutPatternsCoveringExcludedClasses() {
         java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
-        AgentLogger.setTargetStream(new java.io.PrintStream(errBytes));
+        java.io.PrintStream originalErr = System.err;
+        System.setErr(new java.io.PrintStream(errBytes));
         try {
             ClassFilter.fromPatterns("java.util.**", "com.example.**");
         } finally {
-            AgentLogger.reset();
+            System.setErr(originalErr);
         }
         String err = errBytes.toString();
         assertTrue(err, err.contains("[WARN] pattern 'java.util.**' covers JDK, javassist or agent classes"));
@@ -270,10 +274,28 @@ public class ClassFilterTest {
     }
 
     @Test
-    public void parseLinesReturnsOnlyCleanedLines() throws Exception {
-        String content = "# header\n\ncom.example.A\n  com.example.B # with comment\n\n# footer\n";
-        List<String> lines = ClassFilter.parseLines(new StringReader(content));
+    public void parseLinesReturnsOnlyCleanedLines() {
+        List<String> lines = ClassFilter.parseLines(Arrays.asList(
+                "# header", "", "com.example.A", "  com.example.B # with comment", "", "# footer"));
         assertEquals(Arrays.asList("com.example.A", "com.example.B"), lines);
+    }
+
+    /** Cross-checks the glob semantics against the JDK's own glob matcher, which uses the same * and ** rules. */
+    @Test
+    public void matchesLikeJdkGlobMatcher() {
+        assumeTrue("JDK glob matcher uses '/' only on POSIX file systems", "/".equals(FileSystems.getDefault().getSeparator()));
+        List<String> globs = Arrays.asList("com/example/Foo", "com/example/*", "com/example/**", "*",
+                "com/example/*Service", "com/**/Repo", "com/example/Foo$*", "com/*/web/*");
+        List<String> classNames = Arrays.asList("Main", "com/example/Foo", "com/example/Foo$1", "com/example/FooBar",
+                "com/example/OrderService", "com/example/sub/OrderService", "com/example/sub/deep/Baz",
+                "com/example2/Foo", "com/a/Repo", "com/a/b/Repo", "com/a/web/Controller", "com/a/web/x/Controller");
+        for (String glob : globs) {
+            ClassFilter filter = ClassFilter.fromPatterns(glob);
+            PathMatcher jdk = FileSystems.getDefault().getPathMatcher("glob:" + glob);
+            for (String className : classNames) {
+                assertEquals(glob + " vs " + className, jdk.matches(Paths.get(className)), filter.test(className));
+            }
+        }
     }
 
     @Test
@@ -293,6 +315,6 @@ public class ClassFilterTest {
     }
 
     private static ClassFilter fromConfig(String... lines) throws Exception {
-        return new ClassFilter(ClassFilter.parseLines(new StringReader(String.join("\n", lines))));
+        return new ClassFilter(ClassFilter.parseLines(Arrays.asList(lines)));
     }
 }

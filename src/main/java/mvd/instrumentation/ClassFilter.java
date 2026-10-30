@@ -1,8 +1,6 @@
 package mvd.instrumentation;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -11,80 +9,78 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javassist.ClassPool;
 
 /**
  * Decides whether a class should be instrumented. Class names are tested in JVM internal form
  * ({@code com/example/Foo}); patterns may use dots or slashes.
  * <p>
- * Supports:
+ * Each pattern is a glob where {@code *} matches within one package and {@code **} also crosses packages:
  * <ul>
  *   <li>Exact match: {@code com.example.Foo}</li>
  *   <li>Single-level package wildcard: {@code com.example.*} (matches direct classes in package)</li>
  *   <li>Recursive prefix wildcard: {@code com.example.**} (matches package and all subpackages)</li>
- *   <li>Default package single-level: {@code *}</li>
  *   <li>Other globs: e.g. {@code com.example.*Service}</li>
  * </ul>
- * JDK classes, javassist and the agent's own classes are never matched: the instrumentation calls into
- * agent classes that those classes cannot see, which aborts JVM startup or kills the shutdown hook that
- * writes the report. The bare {@code **} pattern is rejected for the same reason.
+ * Exact names and the two package wildcards are matched without regex; other globs share one compiled regex.
+ * <p>
+ * JDK classes, javassist and the agent's own classes are never matched:
+ * <ul>
+ *   <li>JDK classes are loaded by the bootstrap or platform loader, which cannot see the agent classes that the
+ *       injected code calls, so they would throw {@code NoClassDefFoundError} and can abort JVM startup.</li>
+ *   <li>Agent classes would call themselves recursively from the injected code, and the shutdown hook that
+ *       writes the report would fail.</li>
+ *   <li>javassist runs inside the transformer, so instrumenting it would transform the code doing the
+ *       transforming.</li>
+ * </ul>
  */
 final class ClassFilter implements Predicate<String> {
     /** Internal-name prefixes that are never instrumented, including the agent's own package and its subpackages. */
     private static final String[] EXCLUDED_PREFIXES = {
-            "java/", "javax/", "jdk/", "sun/", "com/sun/", "javassist/", "mvd/instrumentation/"};
+            "java/", "javax/", "jdk/", "sun/", "com/sun/", internalPackage(ClassPool.class), internalPackage(DurationAgent.class)};
+    private static final Pattern WILDCARD = Pattern.compile("\\*\\*|\\*");
 
-    private final boolean matchDefaultPackage;
-    private final Set<String> exactMatches;
-    private final String[] recursivePrefixes;
-    private final String[] singleLevelPrefixes;
-    private final Pattern[] globPatterns;
+    private final Set<String> exactMatches = new HashSet<>();
+    /** {@code com/example/**} is stored as {@code com/example/}. */
+    private final List<String> recursivePrefixes = new ArrayList<>();
+    /** {@code com/example/*} is stored as {@code com/example/}. */
+    private final List<String> singleLevelPrefixes = new ArrayList<>();
+    /** Any other glob; null when there are none. */
+    private final Pattern otherGlobs;
 
     /** {@code patterns} must already be trimmed and free of comments, as returned by {@link #parseLines}. */
     ClassFilter(Collection<String> patterns) {
-        boolean defaultPkg = false;
-        Set<String> exact = new HashSet<>();
-        List<String> recursive = new ArrayList<>();
-        List<String> single = new ArrayList<>();
-        List<Pattern> globs = new ArrayList<>();
-
+        List<String> regexes = new ArrayList<>();
         for (String raw : patterns) {
             // Normalize dots to slashes for JVM internal class name format
-            String pattern = raw.replace('.', '/');
-
-            if ("**".equals(pattern)) {
-                throw new IllegalArgumentException("'**' would instrument JDK and agent classes;"
+            String glob = raw.replace('.', '/');
+            if ("**".equals(glob)) {
+                throw new IllegalArgumentException("'**' would instrument every library class;"
                         + " list your own packages instead, e.g. com.example.**");
             }
-            if (isExcluded(pattern)) {
-                AgentLogger.warn("pattern '" + raw + "' covers JDK, javassist or agent classes, which are never instrumented");
+            if (isExcluded(glob)) {
+                AgentLogger.LOG.warn("pattern '" + raw + "' covers JDK, javassist or agent classes, which are never instrumented");
             }
-
-            if ("*".equals(pattern)) {
-                defaultPkg = true;
-            } else if (pattern.endsWith("/**") && pattern.indexOf('*') == pattern.length() - 2) {
-                // e.g. "com/example/**" -> prefix "com/example/"
-                recursive.add(pattern.substring(0, pattern.length() - 2));
-            } else if (pattern.endsWith("/*") && pattern.indexOf('*') == pattern.length() - 1) {
-                // e.g. "com/example/*" -> prefix "com/example/"
-                single.add(pattern.substring(0, pattern.length() - 1));
-            } else if (pattern.indexOf('*') == -1) {
-                exact.add(pattern);
+            // The common shapes skip the regex: a hash lookup or prefix check is ~50x faster.
+            int firstStar = glob.indexOf('*');
+            if (firstStar == -1) {
+                exactMatches.add(glob);
+            } else if (glob.endsWith("/**") && firstStar == glob.length() - 2) {
+                recursivePrefixes.add(glob.substring(0, firstStar));
+            } else if (glob.endsWith("/*") && firstStar == glob.length() - 1) {
+                singleLevelPrefixes.add(glob.substring(0, firstStar));
             } else {
-                globs.add(globToPattern(pattern));
+                regexes.add("(?:" + globToRegex(glob) + ")");
             }
         }
-
-        this.matchDefaultPackage = defaultPkg;
-        this.exactMatches = Collections.unmodifiableSet(exact);
-        this.recursivePrefixes = recursive.toArray(new String[0]);
-        this.singleLevelPrefixes = single.toArray(new String[0]);
-        this.globPatterns = globs.toArray(new Pattern[0]);
+        this.otherGlobs = regexes.isEmpty() ? null : Pattern.compile(String.join("|", regexes));
     }
 
     static ClassFilter fromPatterns(String... patterns) {
@@ -99,31 +95,27 @@ final class ClassFilter implements Predicate<String> {
         if (!Files.exists(path)) {
             throw new IllegalArgumentException("Configuration file not found: " + filePath);
         }
-        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            return new ClassFilter(parseLines(reader));
+        try {
+            return new ClassFilter(parseLines(Files.readAllLines(path, StandardCharsets.UTF_8)));
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read configuration: " + filePath, e);
         }
     }
 
-    /**
-     * Parses non-empty, non-comment lines from a reader, stripping inline comments and trimming whitespace.
-     */
-    static List<String> parseLines(Reader reader) throws IOException {
-        List<String> lines = new ArrayList<>();
-        BufferedReader br = (reader instanceof BufferedReader) ? (BufferedReader) reader : new BufferedReader(reader);
-        String line;
-        while ((line = br.readLine()) != null) {
+    /** Strips {@code #} comments and whitespace, and drops lines left empty. */
+    static List<String> parseLines(List<String> lines) {
+        List<String> patterns = new ArrayList<>();
+        for (String line : lines) {
             int commentIdx = line.indexOf('#');
             if (commentIdx >= 0) {
                 line = line.substring(0, commentIdx);
             }
             line = line.trim();
             if (!line.isEmpty()) {
-                lines.add(line);
+                patterns.add(line);
             }
         }
-        return lines;
+        return patterns;
     }
 
     @Override
@@ -134,26 +126,17 @@ final class ClassFilter implements Predicate<String> {
         if (exactMatches.contains(className)) {
             return true;
         }
-        for (int i = 0; i < recursivePrefixes.length; i++) {
-            if (className.startsWith(recursivePrefixes[i])) {
+        for (String prefix : recursivePrefixes) {
+            if (className.startsWith(prefix)) {
                 return true;
             }
         }
-        for (int i = 0; i < singleLevelPrefixes.length; i++) {
-            String prefix = singleLevelPrefixes[i];
+        for (String prefix : singleLevelPrefixes) {
             if (className.startsWith(prefix) && className.indexOf('/', prefix.length()) == -1) {
                 return true;
             }
         }
-        if (matchDefaultPackage && className.indexOf('/') == -1) {
-            return true;
-        }
-        for (int i = 0; i < globPatterns.length; i++) {
-            if (globPatterns[i].matcher(className).matches()) {
-                return true;
-            }
-        }
-        return false;
+        return otherGlobs != null && otherGlobs.matcher(className).matches();
     }
 
     /** Also applied to patterns, to warn about entries that can never match. */
@@ -166,29 +149,23 @@ final class ClassFilter implements Predicate<String> {
         return false;
     }
 
-    static Pattern globToPattern(String glob) {
-        StringBuilder sb = new StringBuilder("^");
-        int len = glob.length();
-        int i = 0;
-        while (i < len) {
-            char c = glob.charAt(i);
-            if (c == '*') {
-                if (i + 1 < len && glob.charAt(i + 1) == '*') {
-                    sb.append(".*");
-                    i += 2;
-                } else {
-                    sb.append("[^/]*");
-                    i++;
-                }
-            } else if ("\\.[]{}()+?^$|".indexOf(c) >= 0) {
-                sb.append('\\').append(c);
-                i++;
-            } else {
-                sb.append(c);
-                i++;
-            }
+    /** {@code **} becomes {@code .*}, {@code *} becomes {@code [^/]*}, and everything else is matched literally. */
+    static String globToRegex(String glob) {
+        StringBuilder regex = new StringBuilder();
+        Matcher m = WILDCARD.matcher(glob);
+        int literalStart = 0;
+        while (m.find()) {
+            regex.append(Pattern.quote(glob.substring(literalStart, m.start())));
+            regex.append(m.group().length() == 2 ? ".*" : "[^/]*");
+            literalStart = m.end();
         }
-        sb.append("$");
-        return Pattern.compile(sb.toString());
+        regex.append(Pattern.quote(glob.substring(literalStart)));
+        return regex.toString();
+    }
+
+    /** {@code mvd.instrumentation.DurationAgent} -> {@code mvd/instrumentation/}, so a package rename cannot break it. */
+    private static String internalPackage(Class<?> type) {
+        String name = type.getName();
+        return name.substring(0, name.lastIndexOf('.') + 1).replace('.', '/');
     }
 }

@@ -184,7 +184,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
   * System properties structured into clean functional namespaces under `mvd.instrumentation.*`:
     * Core agent logic: `mvd.instrumentation.agent.threshold`, `mvd.instrumentation.agent.maxEvents`
     * Report configuration: `mvd.instrumentation.report.format`, `mvd.instrumentation.report.output`
-    * Diagnostic logging: `mvd.instrumentation.log.level`, `mvd.instrumentation.log.output`
+    * Diagnostic logging: `mvd.instrumentation.log.level`
   * The old `duration.*` names are no longer read; the README has a migration table.
 * **Acceptance Criteria**:
   * Bytecode transformation logging is suppressed by default (`INFO`) and enabled when `mvd.instrumentation.log.level=DEBUG`.
@@ -201,16 +201,19 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
   * The only benchmark ([`ClassFilterBenchmark.java`](src/test/java/mvd/instrumentation/ClassFilterBenchmark.java)) measures `ClassFilter.test`, which runs once per class load and is not on the critical path. The cost users actually pay runs on every call to every instrumented method: `pushStartTime()` (`ThreadLocal` lookup, `System.nanoTime()`, stack push), `popAndRegisterStartTime()`, and the fast rejection of calls under the threshold in `Recorder.record`. The injected `try/finally` also grows each instrumented method, which can stop the JIT from inlining it.
   * `make bench` runs JMH through `exec:java` with `@Fork(0)`. JMH warns that non-forked results are only good for debugging, and this setup cannot attach the agent (`-javaagent`) to the benchmark JVM. The figures quoted in item 3 come from these runs.
   * Nothing detects performance regressions: there is no allocation check, no limit on injected bytecode size, and no benchmark in CI.
+  * `ClassFilter` can regress badly too. A review refactor that compiled every pattern into one regex made `test()` about 50x slower (12 ns to 600 ns per class) and went unnoticed until `make bench` was run by hand. It was reverted to the hash-set and prefix fast paths before merging.
 * **Proposed Solution**:
   * **Deterministic gates** (stable, can fail the build on every PR):
     * Assert that the under-threshold path allocates 0 bytes per call, via JMH `-prof gc` (`gc.alloc.rate.norm`) or a JUnit test around `ThreadMXBean.getThreadAllocatedBytes()` (it counts bytes, not time, so it is not affected by machine load).
     * Cap the bytecode the transformer adds per method (instrumented minus original size), to protect JIT inlining.
   * **Overhead-per-call JMH benchmark**: the same small method called without the agent and with it, attached via `@Fork(jvmArgsAppend = "-javaagent:...")`, so the real javassist-generated code is measured. Cover the under-threshold path, the recorded path, and nested calls.
   * **Proper JMH runs**: `make bench` runs JMH's own `Main` with the test classpath (or a benchmark JAR) and forks by default (`@Fork(2)` or more); results can be written as JSON (`-rf json`). Benchmarks stay runnable on demand.
+  * **`make perf` and a separate CI job**: `make test` stays fast for the dev cycle. `make perf` runs a short JMH configuration (1 fork, 1 warmup and 3 measured rounds of 1 s, ~30 s in total) and fails on regressions; CI runs it on every PR as its own job, in parallel with `test`.
+  * **Per-benchmark limits, not total time**: JMH runs each benchmark for a fixed time, so total suite time stays the same however slow the code gets. Each benchmark gets its own limit: 2x its baseline, or 3x for benchmarks under 10 ns where timer noise dominates. The baseline is either a reference benchmark in the same run (e.g. a `HashSet` lookup, so machine speed cancels out) or master on the same runner (below). This covers `ClassFilterBenchmark`, including a 0 bytes/op allocation check for `ClassFilter.test`.
   * **CI timing check, master vs PR on the same runner**: one job builds both master and the PR and runs the same benchmarks back to back, failing only when the slowdown exceeds a set percentage (e.g. 10–15%) and is larger than JMH's error range. Comparing against stored numbers from other machines is avoided, because shared GitHub runners vary by ~5–10%. Runs on PRs touching `src/main` and nightly on master. Optionally publish trends with `benchmark-action/github-action-benchmark`; tighter thresholds would need a dedicated self-hosted runner.
 * **Acceptance Criteria**:
   * A test fails if the under-threshold path of an instrumented call allocates.
   * A test fails if the bytecode injected per method grows beyond the agreed limit.
   * `make bench` runs forked JMH benchmarks that report per-call overhead with and without the agent.
   * A CI workflow compares PR and master benchmark results on the same runner and fails on a regression above the threshold.
-  * `ClassFilterBenchmark` stays available on demand but does not gate CI.
+  * `make perf` fails when any benchmark, `ClassFilterBenchmark` included, exceeds its limit (2x baseline, 3x under 10 ns) or when `ClassFilter.test` allocates; CI runs it on every PR. `make test` does not run benchmarks.

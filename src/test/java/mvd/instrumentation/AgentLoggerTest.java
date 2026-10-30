@@ -6,8 +6,8 @@ import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -21,7 +21,6 @@ public class AgentLoggerTest {
 
     @Before
     public void setUp() {
-        AgentLogger.reset();
         originalOut = System.out;
         originalErr = System.err;
         outBytes = new ByteArrayOutputStream();
@@ -34,41 +33,33 @@ public class AgentLoggerTest {
     public void tearDown() {
         System.setOut(originalOut);
         System.setErr(originalErr);
-        AgentLogger.reset();
+    }
+
+    private static AgentLogger logger(AgentLogger.Level level) {
+        return new AgentLogger(level, System.nanoTime());
     }
 
     @Test
-    public void defaultLevelIsInfoAndOutputsToStderr() {
-        assertEquals(AgentLogger.Level.INFO, AgentLogger.getLevel());
-        assertFalse(AgentLogger.isDebugEnabled());
-        assertTrue(AgentLogger.isInfoEnabled());
-        assertTrue(AgentLogger.isWarnEnabled());
-        assertTrue(AgentLogger.isErrorEnabled());
-
-        AgentLogger.info("default info message");
+    public void infoOutputsToStderrOnly() {
+        logger(AgentLogger.Level.INFO).info("default info message");
 
         assertEquals("", outBytes.toString());
         String err = errBytes.toString();
-        assertTrue(err, err.contains("DurationAgent:"));
-        assertTrue(err, err.contains("[INFO] default info message"));
-        assertTrue(err, err.matches("(?s).*DurationAgent: \\[\\+\\d+ms\\] \\[INFO\\] default info message.*"));
+        assertTrue(err, err.matches("(?s)DurationAgent: \\[\\+\\d+ms\\] \\[INFO\\] default info message.*"));
     }
 
     @Test
-    public void debugIsSuppressedWhenLevelIsInfo() {
-        AgentLogger.setLevel(AgentLogger.Level.INFO);
-
-        AgentLogger.debug("should not appear");
+    public void debugIsSuppressedAndNotBuiltWhenLevelIsInfo() {
+        logger(AgentLogger.Level.INFO).debug(() -> {
+            throw new AssertionError("message must not be built");
+        });
 
         assertEquals("", errBytes.toString());
     }
 
     @Test
     public void debugIsEmittedWhenLevelIsDebug() {
-        AgentLogger.setLevel(AgentLogger.Level.DEBUG);
-        assertTrue(AgentLogger.isDebugEnabled());
-
-        AgentLogger.debug("debug message");
+        logger(AgentLogger.Level.DEBUG).debug(() -> "debug message");
 
         String err = errBytes.toString();
         assertTrue(err, err.contains("[DEBUG] debug message"));
@@ -76,27 +67,23 @@ public class AgentLoggerTest {
 
     @Test
     public void offSuppressesAllMessages() {
-        AgentLogger.setLevel(AgentLogger.Level.OFF);
-        assertFalse(AgentLogger.isErrorEnabled());
+        AgentLogger log = logger(AgentLogger.Level.OFF);
 
-        AgentLogger.error("error message");
-        AgentLogger.warn("warn message");
-        AgentLogger.info("info message");
-        AgentLogger.debug("debug message");
+        log.error("error message");
+        log.warn("warn message");
+        log.info("info message");
+        log.debug(() -> "debug message");
 
         assertEquals("", errBytes.toString());
     }
 
     @Test
     public void warnAndErrorLevelsFilterAppropriately() {
-        AgentLogger.setLevel(AgentLogger.Level.WARN);
-        assertFalse(AgentLogger.isInfoEnabled());
-        assertTrue(AgentLogger.isWarnEnabled());
-        assertTrue(AgentLogger.isErrorEnabled());
+        AgentLogger log = logger(AgentLogger.Level.WARN);
 
-        AgentLogger.info("ignored");
-        AgentLogger.warn("warning");
-        AgentLogger.error("error");
+        log.info("ignored");
+        log.warn("warning");
+        log.error("error");
 
         String err = errBytes.toString();
         assertFalse(err.contains("ignored"));
@@ -106,9 +93,7 @@ public class AgentLoggerTest {
 
     @Test
     public void logsExceptionStackTraceWhenProvided() {
-        AgentLogger.setLevel(AgentLogger.Level.ERROR);
-
-        AgentLogger.error("failure occurred", new RuntimeException("test exception"));
+        logger(AgentLogger.Level.ERROR).error("failure occurred", new RuntimeException("test exception"));
 
         String err = errBytes.toString();
         assertTrue(err, err.contains("[ERROR] failure occurred"));
@@ -116,51 +101,23 @@ public class AgentLoggerTest {
     }
 
     @Test
-    public void relativeElapsedOffsetIsAccurate() {
-        // Set start time 100ms in the past
-        long now = System.nanoTime();
-        AgentLogger.setStartTimeNanos(now - 100_000_000L);
+    public void elapsedTimeIsMeasuredFromStart() {
+        new AgentLogger(AgentLogger.Level.INFO, System.nanoTime() - 100_000_000L).info("timing check");
 
-        AgentLogger.info("timing check");
-
-        String err = errBytes.toString();
-        assertTrue(err, err.matches("(?s).*DurationAgent: \\[\\+\\d+ms\\] \\[INFO\\] timing check.*"));
+        Matcher m = Pattern.compile("\\[\\+(\\d+)ms\\] \\[INFO\\] timing check").matcher(errBytes.toString());
+        assertTrue(errBytes.toString(), m.find());
+        assertTrue(m.group(1), Long.parseLong(m.group(1)) >= 100);
     }
 
     @Test
-    public void initFromPropertiesConfiguresLevelAndStdout() {
-        Map<String, String> props = new HashMap<>();
-        props.put(AgentLogger.LOG_LEVEL_PROPERTY, "DEBUG");
-        props.put(AgentLogger.LOG_OUTPUT_PROPERTY, "stdout");
-
-        AgentLogger.initFromProperties(props::get);
-
-        assertEquals(AgentLogger.Level.DEBUG, AgentLogger.getLevel());
-        AgentLogger.debug("sent to stdout");
-
-        assertTrue(outBytes.toString().contains("[DEBUG] sent to stdout"));
-        assertEquals("", errBytes.toString());
+    public void parsesLevelCaseInsensitively() {
+        assertEquals(AgentLogger.Level.DEBUG, AgentLogger.Level.parse(" debug ", AgentLogger.Level.INFO));
     }
 
     @Test
-    public void initFromPropertiesFallsBackOnInvalidLevel() {
-        Map<String, String> props = new HashMap<>();
-        props.put(AgentLogger.LOG_LEVEL_PROPERTY, "NOT_A_LEVEL");
-
-        AgentLogger.initFromProperties(props::get);
-
-        assertEquals(AgentLogger.Level.INFO, AgentLogger.getLevel());
-    }
-
-    @Test
-    public void targetStreamCanBeExplicitlySet() {
-        ByteArrayOutputStream customBytes = new ByteArrayOutputStream();
-        PrintStream customStream = new PrintStream(customBytes);
-
-        AgentLogger.setTargetStream(customStream);
-        AgentLogger.info("custom target");
-
-        assertTrue(customBytes.toString().contains("[INFO] custom target"));
-        assertEquals("", errBytes.toString());
+    public void parseFallsBackOnMissingOrInvalidLevel() {
+        assertEquals(AgentLogger.Level.INFO, AgentLogger.Level.parse(null, AgentLogger.Level.INFO));
+        assertEquals(AgentLogger.Level.INFO, AgentLogger.Level.parse("", AgentLogger.Level.INFO));
+        assertEquals(AgentLogger.Level.INFO, AgentLogger.Level.parse("NOT_A_LEVEL", AgentLogger.Level.INFO));
     }
 }
