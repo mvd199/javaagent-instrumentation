@@ -53,46 +53,44 @@ final class ReportConfig {
             throw new IllegalArgumentException("Unknown " + FORMAT_PROPERTY + ": " + format + " (expected summary or json)");
         }
         String output = valueOrDefault(properties.apply(OUTPUT_PROPERTY), DEFAULT_OUTPUT);
-        int maxEvents = parsePositiveInt(properties, MAX_EVENTS_PROPERTY, DEFAULT_MAX_EVENTS);
-        long threshold = parseThreshold(properties);
+        // The range check guarantees the cast to int is safe.
+        int maxEvents = (int) requireInRange(MAX_EVENTS_PROPERTY,
+                readLong(properties, MAX_EVENTS_PROPERTY, DEFAULT_MAX_EVENTS), 1, Integer.MAX_VALUE);
+        long threshold = capThreshold(requireInRange(THRESHOLD_PROPERTY,
+                readLong(properties, THRESHOLD_PROPERTY, DEFAULT_THRESHOLD), 0, Long.MAX_VALUE));
         return new ReportConfig(format, output, maxEvents, threshold);
     }
 
-    private static int parsePositiveInt(Function<String, String> properties, String name, int defaultValue) {
+    /** Reading only: returns the default when unset or blank, throws if the value is not a number. */
+    private static long readLong(Function<String, String> properties, String name, long defaultValue) {
         String raw = properties.apply(name);
         if (raw == null || raw.trim().isEmpty()) {
             return defaultValue;
         }
         try {
-            int value = Integer.parseInt(raw.trim());
-            if (value > 0) {
-                return value;
-            }
-        } catch (NumberFormatException ignored) {
-            // Reported below
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(name + " must be an integer: " + raw);
         }
-        throw new IllegalArgumentException(name + " must be a positive integer: " + raw);
     }
 
-    private static long parseThreshold(Function<String, String> properties) {
-        String raw = properties.apply(THRESHOLD_PROPERTY);
-        if (raw == null || raw.trim().isEmpty()) {
-            return DEFAULT_THRESHOLD;
+    /** Validation only: throws, naming the property, when the value is outside [min, max]. */
+    private static long requireInRange(String name, long value, long min, long max) {
+        if (value < min || value > max) {
+            String range = max == Long.MAX_VALUE ? "at least " + min : "between " + min + " and " + max;
+            throw new IllegalArgumentException(name + " must be " + range + ": " + value);
         }
-        try {
-            long threshold = Long.parseLong(raw.trim());
-            if (threshold > MAX_THRESHOLD) {
-                AgentLogger.LOG.warn(THRESHOLD_PROPERTY + " (" + threshold + " ms) exceeds maximum limit of "
-                        + MAX_THRESHOLD + " ms (3 minutes); capping to " + MAX_THRESHOLD + " ms.");
-                return MAX_THRESHOLD;
-            }
-            if (threshold >= 0) {
-                return threshold;
-            }
-        } catch (NumberFormatException ignored) {
-            // Reported below
+        return value;
+    }
+
+    /** Values above MAX_THRESHOLD are capped with a warning, not rejected. */
+    private static long capThreshold(long threshold) {
+        if (threshold <= MAX_THRESHOLD) {
+            return threshold;
         }
-        throw new IllegalArgumentException(THRESHOLD_PROPERTY + " must be a non-negative integer: " + raw);
+        AgentLogger.LOG.warn(THRESHOLD_PROPERTY + " (" + threshold + " ms) exceeds maximum limit of "
+                + MAX_THRESHOLD + " ms (3 minutes); capping to " + MAX_THRESHOLD + " ms.");
+        return MAX_THRESHOLD;
     }
 
     Reporter reporter() {

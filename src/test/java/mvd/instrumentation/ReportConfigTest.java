@@ -7,6 +7,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ReportConfigTest {
     private static ReportConfig config(String... keyValues) {
@@ -117,6 +118,27 @@ public class ReportConfigTest {
     @Test(expected = IllegalArgumentException.class)
     public void rejectsNonPositiveMaxEvents() {
         config(ReportConfig.MAX_EVENTS_PROPERTY, "0");
+    }
+
+    @Test
+    public void rejectsMaxEventsAboveIntRangeNamingTheRange() {
+        assertMessage("mvd.instrumentation.agent.maxEvents must be between 1 and 2147483647: 2147483648",
+                ReportConfig.MAX_EVENTS_PROPERTY, "2147483648");
+    }
+
+    @Test
+    public void errorMessagesNameThePropertyAndValue() {
+        assertMessage("mvd.instrumentation.agent.threshold must be at least 0: -5", ReportConfig.THRESHOLD_PROPERTY, "-5");
+        assertMessage("mvd.instrumentation.agent.maxEvents must be an integer: lots", ReportConfig.MAX_EVENTS_PROPERTY, "lots");
+    }
+
+    private static void assertMessage(String expected, String property, String value) {
+        try {
+            config(property, value);
+            fail("expected IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            assertEquals(expected, e.getMessage());
+        }
     }
 
     @Test
