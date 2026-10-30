@@ -12,9 +12,9 @@ public class CoreRecorderTest {
 
     @Test
     public void keepsCallsAboveThresholdWithTheirDetails() {
-        CoreRecorder recorder = new CoreRecorder(50, 10, () -> 2);
+        CoreRecorder recorder = new CoreRecorder(50, 10);
 
-        recorder.record("a.B.slow()", startedMillisAgo(80));
+        recorder.record("a.B.slow()", startedMillisAgo(80), 2);
 
         Report report = recorder.snapshot();
         assertEquals(1, report.records.size());
@@ -29,27 +29,20 @@ public class CoreRecorderTest {
 
     @Test
     public void ignoresCallsAtOrBelowThreshold() {
-        CoreRecorder recorder = new CoreRecorder(50, 10, () -> 0);
+        CoreRecorder recorder = new CoreRecorder(50, 10);
 
-        recorder.record("a.B.fast()", System.nanoTime());
+        recorder.record("a.B.fast()", System.nanoTime(), 0);
 
         assertTrue(recorder.snapshot().records.isEmpty());
         assertEquals(0, recorder.snapshot().dropped);
     }
 
     @Test
-    public void doesNotLookUpDepthForCallsBelowThreshold() {
-        CoreRecorder recorder = new CoreRecorder(50, 10, () -> { throw new AssertionError("depth must not be read"); });
-
-        recorder.record("a.B.fast()", System.nanoTime());
-    }
-
-    @Test
     public void dropsAndCountsCallsBeyondTheCap() {
-        CoreRecorder recorder = new CoreRecorder(0, 2, () -> 0);
+        CoreRecorder recorder = new CoreRecorder(0, 2);
 
         for (int i = 0; i < 5; i++) {
-            recorder.record("a.B.m" + i + "()", startedMillisAgo(10));
+            recorder.record("a.B.m" + i + "()", startedMillisAgo(10), 0);
         }
 
         Report report = recorder.snapshot();
@@ -59,12 +52,12 @@ public class CoreRecorderTest {
 
     @Test
     public void acceptsConcurrentRecordsWithoutExceedingTheCap() throws Exception {
-        CoreRecorder recorder = new CoreRecorder(0, 100, () -> 0);
+        CoreRecorder recorder = new CoreRecorder(0, 100);
         Thread[] threads = new Thread[8];
         for (int t = 0; t < threads.length; t++) {
             threads[t] = new Thread(() -> {
                 for (int i = 0; i < 100; i++) {
-                    recorder.record("a.B.m()", startedMillisAgo(10));
+                    recorder.record("a.B.m()", startedMillisAgo(10), 0);
                 }
             });
             threads[t].start();

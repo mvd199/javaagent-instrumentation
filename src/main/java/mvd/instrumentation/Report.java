@@ -1,10 +1,12 @@
 package mvd.instrumentation;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-/** Immutable snapshot of everything the {@link CoreRecorder} captured. */
+/** Immutable snapshot of the slow calls recorded during the run. */
 final class Report {
     /** Parents sort before their children: by start time, then by depth. */
     static final Comparator<ReportRecord> CALL_ORDER =
@@ -14,8 +16,9 @@ final class Report {
     final long dropped;
     final long thresholdMs;
 
-    Report(List<ReportRecord> records, long dropped, long thresholdMs) {
-        this.records = records;
+    /** Copies {@code records}, so the report does not change when the recorder keeps recording. */
+    Report(Collection<ReportRecord> records, long dropped, long thresholdMs) {
+        this.records = Collections.unmodifiableList(new ArrayList<>(records));
         this.dropped = dropped;
         this.thresholdMs = thresholdMs;
     }

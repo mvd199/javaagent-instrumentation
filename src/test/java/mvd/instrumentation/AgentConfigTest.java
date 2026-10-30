@@ -23,10 +23,9 @@ public class AgentConfigTest {
         AgentConfig config = config();
 
         assertEquals(50L, config.threshold);
-        assertEquals("summary", config.format);
-        assertEquals("stdout", config.output);
+        assertEquals(ReportFormat.SUMMARY, config.format);
+        assertEquals(ReportOutput.STDOUT, config.output);
         assertEquals(100_000, config.maxEvents);
-        assertTrue(config.reporter() instanceof ReportSummaryFormatter);
     }
 
     @Test
@@ -51,20 +50,9 @@ public class AgentConfigTest {
     }
 
     @Test
-    public void capsThresholdExceedingMaxLimitAndLogsWarning() {
-        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
-        java.io.PrintStream originalErr = System.err;
-        System.setErr(new java.io.PrintStream(errBytes));
-        try {
-            AgentConfig config = config(AgentConfig.THRESHOLD_PROPERTY, "86400000");
-
-            assertEquals(AgentConfig.MAX_THRESHOLD, config.threshold);
-        } finally {
-            System.setErr(originalErr);
-        }
-        String err = errBytes.toString();
-        assertTrue(err, err.contains("[WARN] " + AgentConfig.THRESHOLD_PROPERTY
-                + " (86400000 ms) exceeds maximum limit of 180000 ms (3 minutes); capping to 180000 ms."));
+    public void rejectsThresholdAboveMaxLimit() {
+        assertMessage("mvd.instrumentation.agent.threshold must be between 0 and 180000: 86400000",
+                AgentConfig.THRESHOLD_PROPERTY, "86400000");
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -81,7 +69,7 @@ public class AgentConfigTest {
     public void ignoresRemovedDurationProperties() {
         AgentConfig config = AgentConfig.from(property -> property.startsWith("duration.") ? "json" : null);
 
-        assertEquals("summary", config.format);
+        assertEquals(ReportFormat.SUMMARY, config.format);
     }
 
     @Test
@@ -91,17 +79,17 @@ public class AgentConfigTest {
                 AgentConfig.OUTPUT_PROPERTY, "/tmp/duration.jsonl",
                 AgentConfig.MAX_EVENTS_PROPERTY, " 500 ");
 
-        assertEquals("json", config.format);
-        assertEquals("/tmp/duration.jsonl", config.output);
+        assertEquals(ReportFormat.JSON, config.format);
+        assertEquals(ReportOutput.Kind.FILE, config.output.kind);
+        assertEquals(java.nio.file.Paths.get("/tmp/duration.jsonl"), config.output.file);
         assertEquals(500, config.maxEvents);
-        assertTrue(config.reporter() instanceof ReportJsonFormatter);
     }
 
     @Test
     public void blankValuesFallBackToDefaults() {
         AgentConfig config = config(AgentConfig.FORMAT_PROPERTY, " ", AgentConfig.MAX_EVENTS_PROPERTY, "");
 
-        assertEquals("summary", config.format);
+        assertEquals(ReportFormat.SUMMARY, config.format);
         assertEquals(100_000, config.maxEvents);
     }
 
@@ -128,7 +116,8 @@ public class AgentConfigTest {
 
     @Test
     public void errorMessagesNameThePropertyAndValue() {
-        assertMessage("mvd.instrumentation.agent.threshold must be at least 0: -5", AgentConfig.THRESHOLD_PROPERTY, "-5");
+        assertMessage("mvd.instrumentation.agent.threshold must be between 0 and 180000: -5", AgentConfig.THRESHOLD_PROPERTY, "-5");
+        assertMessage("mvd.instrumentation.report.format must be summary or json: xml", AgentConfig.FORMAT_PROPERTY, "xml");
         assertMessage("mvd.instrumentation.agent.maxEvents must be an integer: lots", AgentConfig.MAX_EVENTS_PROPERTY, "lots");
     }
 
@@ -147,25 +136,7 @@ public class AgentConfigTest {
                 AgentConfig.FORMAT_PROPERTY, "JSON",
                 AgentConfig.OUTPUT_PROPERTY, "STDOUT");
 
-        assertEquals("json", config.format);
-        assertEquals("STDOUT", config.output);
-        assertTrue(config.reporter() instanceof ReportJsonFormatter);
-    }
-
-    @Test
-    public void createsParentDirectoriesForFileOutput() throws Exception {
-        java.io.File dir = new java.io.File(System.getProperty("java.io.tmpdir"), "duration-test-" + System.nanoTime());
-        java.io.File file = new java.io.File(dir, "sub/report.txt");
-        try {
-            AgentConfig config = config(AgentConfig.OUTPUT_PROPERTY, file.getPath());
-            try (java.io.PrintWriter out = config.openOutput()) {
-                out.println("hello");
-            }
-            assertTrue(file.exists());
-        } finally {
-            file.delete();
-            file.getParentFile().delete();
-            dir.delete();
-        }
+        assertEquals(ReportFormat.JSON, config.format);
+        assertEquals(ReportOutput.STDOUT, config.output);
     }
 }
