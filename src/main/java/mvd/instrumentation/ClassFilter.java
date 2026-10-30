@@ -35,10 +35,9 @@ import java.util.regex.Pattern;
  * writes the report. The bare {@code **} pattern is rejected for the same reason.
  */
 final class ClassFilter implements Predicate<String> {
-    /** Internal-name prefixes that are never instrumented. */
-    private static final String[] EXCLUDED_PREFIXES = {"java/", "javax/", "jdk/", "sun/", "com/sun/", "javassist/"};
-    /** Agent classes live directly in this package; subpackages (e.g. the demo) may be instrumented. */
-    private static final String AGENT_PACKAGE = "mvd/instrumentation/";
+    /** Internal-name prefixes that are never instrumented, including the agent's own package and its subpackages. */
+    private static final String[] EXCLUDED_PREFIXES = {
+            "java/", "javax/", "jdk/", "sun/", "com/sun/", "javassist/", "mvd/instrumentation/"};
 
     private final boolean matchDefaultPackage;
     private final Set<String> exactMatches;
@@ -164,8 +163,7 @@ final class ClassFilter implements Predicate<String> {
                 return true;
             }
         }
-        return internalName.startsWith(AGENT_PACKAGE)
-                && internalName.indexOf('/', AGENT_PACKAGE.length()) == -1;
+        return false;
     }
 
     static Pattern globToPattern(String glob) {

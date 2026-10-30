@@ -34,7 +34,7 @@ demo: check-docker
 	$(DOCKER_RUN) mvn test-compile package -DskipTests -B
 	$(DOCKER_RUN) java $(JAVA_OPTS) -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=demo.cfg \
 		-cp target/test-classes:target/classes \
-		mvd.instrumentation.demo.DemoApp
+		mvd.demo.DemoApp
 
 bench: check-docker
 	$(DOCKER_RUN) mvn test-compile exec:java -Dexec.mainClass="mvd.instrumentation.ClassFilterBenchmark" $(ARGS)

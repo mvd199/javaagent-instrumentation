@@ -1,4 +1,4 @@
-package mvd.instrumentation.demo;
+package mvd.demo;
 
 /**
  * Demo runner class. Not listed in demo.cfg, so its own methods

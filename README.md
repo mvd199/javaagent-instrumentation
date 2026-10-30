@@ -16,7 +16,7 @@ Run the showcase demo with a single command:
 make demo
 ```
 
-This compiles the agent, instruments the included demo service ([`DemoService`](https://github.com/mvd199/javaagent-instrumentation/blob/master/src/test/java/mvd/instrumentation/demo/DemoService.java)), and runs the showcase app ([`DemoApp`](https://github.com/mvd199/javaagent-instrumentation/blob/master/src/test/java/mvd/instrumentation/demo/DemoApp.java)).
+This compiles the agent, instruments the included demo service ([`DemoService`](https://github.com/mvd199/javaagent-instrumentation/blob/master/src/test/java/mvd/demo/DemoService.java)), and runs the showcase app ([`DemoApp`](https://github.com/mvd199/javaagent-instrumentation/blob/master/src/test/java/mvd/demo/DemoApp.java)).
 
 ### Demo Output
 ```text
@@ -25,7 +25,6 @@ This compiles the agent, instruments the included demo service ([`DemoService`](
 ==================================================
 Threshold: 50 milliseconds
 
-Transforming: mvd/instrumentation/demo/DemoService
 [Step 1] Calling fastTask() (~10ms)...
          -> Completed! (Under the 50ms threshold, so it is not recorded)
 
@@ -43,14 +42,14 @@ threshold: 50 ms   recorded: 3 calls   dropped: 0   threads: 1   wall: 0.22 s
 
 --- Slowest methods (top 10, by total time) -----------------------------
   calls   total ms    max ms    avg ms   method
-      1        122       122       122   mvd.instrumentation.demo.DemoService.slowQuery()
-      1         97        97        97   mvd.instrumentation.demo.DemoService.nestedWorkflow()
-      1         85        85        85   mvd.instrumentation.demo.DemoService.heavyComputation()
+      1        122       122       122   mvd.demo.DemoService.slowQuery()
+      1         97        97        97   mvd.demo.DemoService.nestedWorkflow()
+      1         85        85        85   mvd.demo.DemoService.heavyComputation()
 
 --- Call tree: thread "main" --------------------------------------------
-  [   0 ms]    122 ms  mvd.instrumentation.demo.DemoService.slowQuery()
-  [ 124 ms]     97 ms  mvd.instrumentation.demo.DemoService.nestedWorkflow()
-  [ 135 ms]     85 ms    mvd.instrumentation.demo.DemoService.heavyComputation()
+  [   0 ms]    122 ms  mvd.demo.DemoService.slowQuery()
+  [ 124 ms]     97 ms  mvd.demo.DemoService.nestedWorkflow()
+  [ 135 ms]     85 ms    mvd.demo.DemoService.heavyComputation()
 ```
 
 To try the other report options, pass JVM options through `JAVA_OPTS`. Paths must be inside the project, which the container sees as `/workspace`:
@@ -119,7 +118,7 @@ com.mycompany.web.*
 com.mycompany.repository.**
 ```
 
-The bundled `demo.cfg` (used by `make demo`) whitelists only `mvd.instrumentation.demo.DemoService`.
+The bundled `demo.cfg` (used by `make demo`) whitelists only `mvd.demo.DemoService`.
 
 ### 2. Attach the Agent to Your Application
 Add the `-javaagent` flag to your JVM startup options:

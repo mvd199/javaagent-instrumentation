@@ -140,11 +140,12 @@ public class ClassFilterTest {
     }
 
     @Test
-    public void neverMatchesAgentClassesButAllowsAgentSubpackages() {
-        ClassFilter filter = ClassFilter.fromPatterns("mvd.instrumentation.**");
+    public void neverMatchesAgentPackageOrItsSubpackages() {
+        ClassFilter filter = ClassFilter.fromPatterns("mvd.**");
         assertFalse(filter.test("mvd/instrumentation/AgentLogger"));
         assertFalse(filter.test("mvd/instrumentation/DurationTransformer$LongStack"));
-        assertTrue(filter.test("mvd/instrumentation/demo/DemoService"));
+        assertFalse(filter.test("mvd/instrumentation/report/Anything"));
+        assertTrue(filter.test("mvd/demo/DemoService"));
     }
 
     @Test
