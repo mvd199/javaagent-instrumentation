@@ -34,15 +34,17 @@
   }
 
   // records arrive parents-first; per thread, depth tells where each call hangs in the tree.
-  function buildTrees(list) {
+  function buildTrees(list, keep) {
     var roots = {}, stacks = {};
     list.forEach(function (r) {
-      var node = { r: r, children: [] };
       var stack = stacks[r.thread] || (stacks[r.thread] = []);
       stack.length = Math.min(stack.length, r.depth);
-      var parent = stack[r.depth - 1];
-      // A missing parent (dropped or below threshold) lifts the call to the nearest recorded ancestor.
-      for (var d = r.depth - 1; !parent && d >= 0; d--) parent = stack[d];
+      if (keep && !keep(r)) return;
+      var node = { r: r, children: [] }, parent = null;
+      // A missing parent (dropped, below threshold, or filtered out) lifts the call to the nearest active ancestor.
+      for (var d = r.depth - 1; d >= 0; d--) {
+        if (stack[d] && r.timestamp <= stack[d].r.timestamp + stack[d].r.durationMs) { parent = stack[d]; break; }
+      }
       if (parent) parent.children.push(node); else (roots[r.thread] || (roots[r.thread] = [])).push(node);
       stack[r.depth] = node;
     });
@@ -50,13 +52,13 @@
   }
 
   function callNode(node, max) {
-    var d = el('details', 'call' + (node.r.durationMs >= max * 0.5 ? ' slow' : ''));
+    var d = el('details', 'call' + (max > 0 && node.r.durationMs >= max * 0.5 ? ' slow' : ''));
     d.open = true;
     var s = el('summary');
     s.appendChild(el('span', 'method', node.r.method));
     s.appendChild(el('span', 'duration', fmt(node.r.durationMs)));
     var bar = el('span', 'bar'), fill = el('span', 'fill');
-    fill.style.width = Math.max(1, node.r.durationMs / max * 100) + '%';
+    fill.style.width = (max > 0 ? Math.max(1, node.r.durationMs / max * 100) : 0) + '%';
     bar.appendChild(fill);
     s.appendChild(bar);
     d.appendChild(s);
@@ -124,15 +126,16 @@
 
     function refresh() {
       var q = filter.value.toLowerCase();
-      var matching = records.filter(function (r) {
+      var matches = function (r) {
         return (!threads.value || r.thread === threads.value) && r.method.toLowerCase().indexOf(q) >= 0;
-      });
+      };
+      var matching = records.filter(matches);
       slowSection.textContent = '';
       slowSection.appendChild(el('h2', '', 'Slowest methods'));
       slowSection.appendChild(slowestTable(matching, 10));
       treeSection.textContent = '';
       treeSection.appendChild(el('h2', '', 'Call tree'));
-      var trees = buildTrees(matching);
+      var trees = buildTrees(records, matches);
       Object.keys(trees).sort().forEach(function (t) {
         treeSection.appendChild(el('h3', 'thread-name', t));
         var tree = el('div', 'tree');

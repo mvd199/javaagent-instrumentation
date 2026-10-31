@@ -8,7 +8,7 @@ import java.util.function.Function;
  * Agent settings, read from system properties and validated on creation, so an instance is always well formed.
  * Pure data: the components built from it are created in {@link DurationAgent#premain}.
  * - Core agent configs: mvd.instrumentation.agent.threshold, mvd.instrumentation.agent.maxEvents
- * - Report configs: mvd.instrumentation.report.format, mvd.instrumentation.report.output,
+ * - Report configs: mvd.instrumentation.report.format, mvd.instrumentation.report.output
  */
 final class AgentConfig {
     static final String THRESHOLD_PROPERTY = "mvd.instrumentation.agent.threshold";

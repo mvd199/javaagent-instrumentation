@@ -40,6 +40,26 @@ public class ReportWriterTest {
     }
 
     @Test
+    public void writesHtmlFormatToConfiguredFile() throws Exception {
+        File output = new File(folder.getRoot(), "report.html");
+        CoreRecorder recorder = new CoreRecorder(0, 10);
+        recorder.record("a.B.slow()", System.nanoTime() - 20_000_000L, 0);
+        AgentConfig config = AgentConfig.from(property -> {
+            switch (property) {
+                case AgentConfig.FORMAT_PROPERTY: return "html";
+                case AgentConfig.OUTPUT_PROPERTY: return output.getPath();
+                default: return null;
+            }
+        });
+
+        new ReportWriter(config).write(recorder.snapshot());
+
+        String content = new String(Files.readAllBytes(output.toPath()), StandardCharsets.UTF_8);
+        assertTrue(content, content.startsWith("<!DOCTYPE html>"));
+        assertTrue(content, content.contains("\"method\":\"a.B.slow()\""));
+    }
+
+    @Test
     public void jsonMetaLineCarriesDroppedCalls() throws Exception {
         File output = new File(folder.getRoot(), "report.jsonl");
         CoreRecorder recorder = new CoreRecorder(0, 1);
