@@ -5,17 +5,17 @@ import java.nio.file.Paths;
 import java.util.Locale;
 import java.util.Optional;
 
-/** Where the report goes: stdout, stderr or a file. */
+/** Where the report goes: stdout, stderr or a file. A union of the three: {@link #file} is set only for {@link Kind#FILE}. */
 final class ReportOutput {
     enum Kind { STDOUT, STDERR, FILE }
 
-    static final ReportOutput STDOUT = new ReportOutput(Kind.STDOUT, null);
-    static final ReportOutput STDERR = new ReportOutput(Kind.STDERR, null);
+    static final ReportOutput STDOUT = new ReportOutput(Kind.STDOUT, Optional.empty());
+    static final ReportOutput STDERR = new ReportOutput(Kind.STDERR, Optional.empty());
 
     final Kind kind;
-    private final Path file;
+    final Optional<Path> file;
 
-    private ReportOutput(Kind kind, Path file) {
+    private ReportOutput(Kind kind, Optional<Path> file) {
         this.kind = kind;
         this.file = file;
     }
@@ -28,16 +28,11 @@ final class ReportOutput {
         if ("stderr".equalsIgnoreCase(value)) {
             return STDERR;
         }
-        return new ReportOutput(Kind.FILE, Paths.get(value));
-    }
-
-    /** Present only for {@link Kind#FILE}. */
-    Optional<Path> file() {
-        return Optional.ofNullable(file);
+        return new ReportOutput(Kind.FILE, Optional.of(Paths.get(value)));
     }
 
     @Override
     public String toString() {
-        return kind == Kind.FILE ? file.toString() : kind.name().toLowerCase(Locale.ROOT);
+        return file.map(Path::toString).orElse(kind.name().toLowerCase(Locale.ROOT));
     }
 }

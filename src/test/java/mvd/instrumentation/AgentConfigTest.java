@@ -81,7 +81,7 @@ public class AgentConfigTest {
 
         assertEquals(ReportFormat.JSON, config.format);
         assertEquals(ReportOutput.Kind.FILE, config.output.kind);
-        assertEquals(java.nio.file.Paths.get("/tmp/duration.jsonl"), config.output.file().get());
+        assertEquals(java.nio.file.Paths.get("/tmp/duration.jsonl"), config.output.file.get());
         assertEquals(500, config.maxEvents);
     }
 
@@ -105,8 +105,8 @@ public class AgentConfigTest {
 
     @Test
     public void standardStreamsHaveNoFile() {
-        assertEquals(java.util.Optional.empty(), config().output.file());
-        assertEquals(java.util.Optional.empty(), config(AgentConfig.OUTPUT_PROPERTY, "stderr").output.file());
+        assertEquals(java.util.Optional.empty(), config().output.file);
+        assertEquals(java.util.Optional.empty(), config(AgentConfig.OUTPUT_PROPERTY, "stderr").output.file);
     }
 
     @Test(expected = IllegalArgumentException.class)

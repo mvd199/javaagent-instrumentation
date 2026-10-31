@@ -61,7 +61,7 @@ final class ReportWriter {
             case STDERR:
                 return nonClosing(System.err);
             default:
-                Path file = output.file().get();
+                Path file = output.file.get();
                 Path parent = file.getParent();
                 if (parent != null) {
                     Files.createDirectories(parent);
