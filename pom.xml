@@ -66,6 +66,14 @@
                             </manifestEntries>
                         </transformer>
                     </transformers>
+                    <!-- Move javassist under the agent's package so it cannot clash with a javassist
+                         copy in the profiled application (Hibernate, Quarkus, ...). -->
+                    <relocations>
+                        <relocation>
+                            <pattern>javassist</pattern>
+                            <shadedPattern>mvd.instrumentation.shaded.javassist</shadedPattern>
+                        </relocation>
+                    </relocations>
                     <createDependencyReducedPom>false</createDependencyReducedPom>
                 </configuration>
                 <executions>

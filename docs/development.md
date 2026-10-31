@@ -17,6 +17,7 @@ If you have JDK 11+ and Maven installed locally, plain `mvn test` and `mvn packa
 | `make` or `make test` | Runs the unit tests, then prints a JaCoCo coverage summary |
 | `make test ARGS="-Dtest=CoreRecorderTest"` | Runs a single test class |
 | `make package` | Builds the shaded agent JAR at `target/java-instrumentation-1.0-SNAPSHOT.jar` |
+| `make verify-shading` | Builds the agent JAR and runs [`verify-shading.sh`](../scripts/verify-shading.sh), which checks that javassist is relocated and that the agent works next to an application's own javassist |
 | `make demo` | Builds the agent and runs [`DemoApp`](../src/test/java/mvd/demo/DemoApp.java) with it attached (pass `JAVA_OPTS="..."` for report options) |
 | `make bench` | Runs the JMH microbenchmarks in [`CoreClassFilterBenchmark`](../src/test/java/mvd/instrumentation/CoreClassFilterBenchmark.java) |
 | `make clean` | Deletes `target/` |
@@ -29,7 +30,7 @@ After renaming or deleting a class, run `make clean` before `make test`. Otherwi
 
 ## CI
 
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs `mvn -B test` on Java 11 for every pull request and every push to `master`, and uploads the JaCoCo report as a build artifact.
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs `mvn -B verify` and `scripts/verify-shading.sh` on Java 11 for every pull request and every push to `master`, and uploads the JaCoCo report as a build artifact.
 
 ## Project layout
 

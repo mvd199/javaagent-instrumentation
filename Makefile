@@ -10,7 +10,7 @@ DOCKER_RUN = docker run --rm \
 	-e MAVEN_CONFIG=/var/maven/.m2 -e MAVEN_OPTS=-Duser.home=/var/maven -v "$(M2_CACHE)":/var/maven/.m2 \
 	$(IMAGE)
 
-.PHONY: all check-docker test package clean compile demo bench help
+.PHONY: all check-docker test package verify-shading clean compile demo bench help
 
 all: test
 
@@ -24,6 +24,10 @@ test: check-docker
 package: check-docker
 	$(DOCKER_RUN) mvn package $(ARGS)
 
+verify-shading: check-docker
+	$(DOCKER_RUN) mvn test-compile package -DskipTests -B
+	$(DOCKER_RUN) env M2_REPO=/var/maven/.m2/repository scripts/verify-shading.sh
+
 compile: check-docker
 	$(DOCKER_RUN) mvn compile $(ARGS)
 
@@ -33,7 +37,7 @@ clean: check-docker
 demo: check-docker
 	$(DOCKER_RUN) mvn test-compile package -DskipTests -B
 	$(DOCKER_RUN) java $(JAVA_OPTS) -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=demo.cfg \
-		-cp target/test-classes:target/classes \
+		-cp target/test-classes \
 		mvd.demo.DemoApp
 
 bench: check-docker
@@ -44,6 +48,7 @@ help:
 	@echo "  make         - Run unit tests (default)"
 	@echo "  make test    - Run unit tests (pass ARGS='-Dtest=...' for specific test)"
 	@echo "  make package - Build the shaded agent JAR"
+	@echo "  make verify-shading - Check that the agent JAR relocates javassist"
 	@echo "  make bench   - Run JMH microbenchmarks for CoreClassFilter"
 	@echo "  make demo    - Build and run the interactive showcase demo (pass JAVA_OPTS='-Dmvd.instrumentation.report.format=json')"
 	@echo "  make clean   - Clean the build artifacts"
