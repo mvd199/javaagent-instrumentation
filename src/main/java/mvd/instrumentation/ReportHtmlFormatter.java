@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
@@ -11,7 +12,7 @@ import java.nio.charset.StandardCharsets;
  * A single self-contained HTML page. It only injects data: the markup, rendering script and stylesheet
  * are static resources, so the look can change without touching how the records are presented.
  * The page is {@code report.html} with three placeholders filled in: {@code {{STYLE}}}, {@code {{SCRIPT}}} and
- * {@code {{DATA}}} (a JSON object read by the script).
+ * {@code {{DATA}}} (the report as JSON lines, read by the script).
  */
 final class ReportHtmlFormatter implements ReportFormatter {
     private static final String RESOURCE_DIR = "/mvd/instrumentation/";
@@ -29,22 +30,13 @@ final class ReportHtmlFormatter implements ReportFormatter {
         }
     }
 
-    /** JSON safe to embed in a script element: every '<' is escaped, so no string can close the element. */
+    /** The JSON lines of {@link ReportJsonFormatter}, safe to embed in a script element: every '<' is escaped. */
     static String data(Report report) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{\"thresholdMs\":").append(report.thresholdMs);
-        sb.append(",\"dropped\":").append(report.dropped);
-        sb.append(",\"records\":[");
-        boolean first = true;
-        for (ReportRecord call : report.inCallOrder()) {
-            if (!first) {
-                sb.append(',');
-            }
-            first = false;
-            ReportJsonFormatter.appendRecord(call, sb);
-        }
-        sb.append("]}");
-        return sb.toString().replace("<", "\\u003c");
+        StringWriter lines = new StringWriter();
+        PrintWriter out = new PrintWriter(lines);
+        new ReportJsonFormatter().write(report, out);
+        out.flush();
+        return lines.toString().replace("<", "\\u003c");
     }
 
     private static String resource(String name) throws IOException {

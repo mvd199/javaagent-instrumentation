@@ -4,30 +4,30 @@ import java.io.PrintWriter;
 import java.util.Locale;
 
 /**
- * JSON lines (always {@code \n}-terminated, whatever the platform), one object per slow call, ordered so parents precede their children.
+ * JSON lines (always {@code \n}-terminated, whatever the platform). The first line is a {@code meta} object with the
+ * report-level fields; one {@code call} object per slow call follows, ordered so parents precede their children.
+ * Also the data model embedded in the HTML report, so both formats carry the same thing.
  */
 final class ReportJsonFormatter implements ReportFormatter {
     @Override
     public void write(Report report, PrintWriter out) {
         StringBuilder sb = new StringBuilder();
+        sb.append("{\"type\":\"meta\",\"thresholdMs\":").append(report.thresholdMs);
+        sb.append(",\"dropped\":").append(report.dropped);
+        sb.append("}\n");
+        out.print(sb.toString());
         for (ReportRecord call : report.inCallOrder()) {
             sb.setLength(0);
-            appendRecord(call, sb);
-            sb.append('\n');
+            sb.append("{\"type\":\"call\",\"timestamp\":").append(call.timestampMillis);
+            sb.append(",\"thread\":");
+            quote(call.thread, sb);
+            sb.append(",\"method\":");
+            quote(call.method, sb);
+            sb.append(",\"durationMs\":").append(call.durationMs);
+            sb.append(",\"depth\":").append(call.depth);
+            sb.append("}\n");
             out.print(sb.toString());
         }
-    }
-
-    /** One call as a JSON object, shared with {@link ReportHtmlFormatter} so both formats carry the same fields. */
-    static void appendRecord(ReportRecord call, StringBuilder sb) {
-        sb.append("{\"timestamp\":").append(call.timestampMillis);
-        sb.append(",\"thread\":");
-        quote(call.thread, sb);
-        sb.append(",\"method\":");
-        quote(call.method, sb);
-        sb.append(",\"durationMs\":").append(call.durationMs);
-        sb.append(",\"depth\":").append(call.depth);
-        sb.append('}');
     }
 
     private static void quote(String value, StringBuilder sb) {

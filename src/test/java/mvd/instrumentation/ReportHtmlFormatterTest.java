@@ -26,8 +26,8 @@ public class ReportHtmlFormatterTest {
 
         String html = render(new Report(records, 3, 50));
 
-        assertTrue(html, html.contains("{\"thresholdMs\":50,\"dropped\":3,\"records\":["
-                + "{\"timestamp\":1000,\"thread\":\"main\",\"method\":\"a.B.m()\",\"durationMs\":60,\"depth\":0}]}"));
+        assertTrue(html, html.contains("{\"type\":\"meta\",\"thresholdMs\":50,\"dropped\":3}\n"
+                + "{\"type\":\"call\",\"timestamp\":1000,\"thread\":\"main\",\"method\":\"a.B.m()\",\"durationMs\":60,\"depth\":0}\n"));
         assertTrue(html.contains("getElementById('report-data')"));
         assertTrue(html.contains("--accent"));
         assertFalse(html.contains("{{"));

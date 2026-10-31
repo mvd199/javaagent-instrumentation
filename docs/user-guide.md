@@ -51,9 +51,9 @@ java -Dmvd.instrumentation.agent.threshold=100 \
      -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=classes.cfg -jar your-app.jar
 ```
 
-- **JSON lines:** each line looks like `{"timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is how many instrumented calls were still running on the same thread.
+- **JSON lines:** the first line is `{"type":"meta","thresholdMs":50,"dropped":0}`, followed by one line per call, parents first: `{"type":"call","timestamp":1696871234000,"thread":"main","method":"com.acme.Foo.bar()","durationMs":120,"depth":0}`. `depth` is how many instrumented calls were still running on the same thread. The `html` report embeds exactly these lines.
 - **HTML:** use `report.format=html` with a `report.output` file such as `/tmp/duration.html` and open it in a browser; it works offline. The page filters by method and thread and shows a collapsible call tree.
-- **Dropped calls:** calls beyond `mvd.instrumentation.agent.maxEvents` are counted, and the count appears in the `text` header (or as a warning on `stderr` for `json`; the `html` page shows it as a stat).
+- **Dropped calls:** calls beyond `mvd.instrumentation.agent.maxEvents` are counted, and the count appears in the `text` header, the `meta` line of `json`, and as a stat in `html`.
 - **Invalid values** (unknown format, non-numeric or out-of-range number) stop the JVM at startup with an error naming the property.
 - **Diagnostic logs** (e.g. `[+12ms] [DEBUG] Transforming: ...`) always go to `stderr`, so they never mix with the report.
 - **No report on `kill -9`:** it is written by a shutdown hook.

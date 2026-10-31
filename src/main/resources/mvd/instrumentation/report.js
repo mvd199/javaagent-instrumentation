@@ -1,6 +1,6 @@
 /*
- * Rendering logic. Reads the JSON in #report-data and builds the DOM inside #app; it sets no styles of its own, so a
- * stylesheet fully controls the look. The class names are the contract with report.css:
+ * Rendering logic. Reads the JSON lines in #report-data (a "meta" line, then "call" lines) and builds the DOM
+ * inside #app; it sets no styles of its own, so a stylesheet fully controls the look. The class names are the contract with report.css:
  *
  *   .summary > .stat (> .label, .value) | .toolbar > input.filter, select.thread | .error
  *   .section > h2 | table.slowest (th.num, td.num, td.method)
@@ -9,8 +9,10 @@
  */
 (function () {
   'use strict';
-  var data = JSON.parse(document.getElementById('report-data').textContent);
-  var records = data.records;
+  var lines = document.getElementById('report-data').textContent.split('\n').filter(function (l) { return l.trim(); });
+  var parsed = lines.map(function (l) { return JSON.parse(l); });
+  var data = parsed.filter(function (o) { return o.type === 'meta'; })[0] || { thresholdMs: 0, dropped: 0 };
+  var records = parsed.filter(function (o) { return o.type === 'call'; });
   var app = document.getElementById('app');
 
   function el(tag, cls, text) {

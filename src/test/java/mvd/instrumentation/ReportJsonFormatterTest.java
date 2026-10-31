@@ -26,9 +26,10 @@ public class ReportJsonFormatterTest {
 
         String[] lines = render(new Report(records, 0, 50)).split("\\R");
 
-        assertEquals(2, lines.length);
-        assertEquals("{\"timestamp\":1696871234000,\"thread\":\"main\",\"method\":\"a.B.parent()\",\"durationMs\":120,\"depth\":0}", lines[0]);
-        assertEquals("{\"timestamp\":1696871234100,\"thread\":\"main\",\"method\":\"a.B.child()\",\"durationMs\":90,\"depth\":1}", lines[1]);
+        assertEquals(3, lines.length);
+        assertEquals("{\"type\":\"meta\",\"thresholdMs\":50,\"dropped\":0}", lines[0]);
+        assertEquals("{\"type\":\"call\",\"timestamp\":1696871234000,\"thread\":\"main\",\"method\":\"a.B.parent()\",\"durationMs\":120,\"depth\":0}", lines[1]);
+        assertEquals("{\"type\":\"call\",\"timestamp\":1696871234100,\"thread\":\"main\",\"method\":\"a.B.child()\",\"durationMs\":90,\"depth\":1}", lines[2]);
     }
 
     @Test
@@ -36,19 +37,19 @@ public class ReportJsonFormatterTest {
         List<ReportRecord> records = Arrays.asList(
                 new ReportRecord(1L, 1L, "t\"1\\", "a.B.m(java.lang.String[])\n\u0001", 60, 0));
 
-        String line = render(new Report(records, 0, 50)).trim();
+        String line = render(new Report(records, 0, 50)).split("\\R")[1];
 
-        assertEquals("{\"timestamp\":1,\"thread\":\"t\\\"1\\\\\",\"method\":\"a.B.m(java.lang.String[])\\n\\u0001\",\"durationMs\":60,\"depth\":0}", line);
+        assertEquals("{\"type\":\"call\",\"timestamp\":1,\"thread\":\"t\\\"1\\\\\",\"method\":\"a.B.m(java.lang.String[])\\n\\u0001\",\"durationMs\":60,\"depth\":0}", line);
     }
 
     @Test
-    public void doesNotIncludeDroppedCountInJsonOutput() {
+    public void metaLineCarriesThresholdAndDroppedCount() {
         List<ReportRecord> records = Arrays.asList(new ReportRecord(1L, 1L, "main", "a.B.m()", 60, 0));
 
         String[] output = render(new Report(records, 7, 50)).split("\\R");
 
-        assertEquals(1, output.length);
-        assertEquals("{\"timestamp\":1,\"thread\":\"main\",\"method\":\"a.B.m()\",\"durationMs\":60,\"depth\":0}", output[0]);
+        assertEquals(2, output.length);
+        assertEquals("{\"type\":\"meta\",\"thresholdMs\":50,\"dropped\":7}", output[0]);
     }
 
     @Test
@@ -59,12 +60,13 @@ public class ReportJsonFormatterTest {
 
         String text = render(new Report(records, 0, 50));
 
-        assertEquals(2, text.split("\n", -1).length - 1);
+        assertEquals(3, text.split("\n", -1).length - 1);
         assertEquals(false, text.contains("\r"));
     }
 
     @Test
-    public void emptyReportProducesNoOutput() {
-        assertEquals("", render(new Report(Arrays.asList(), 0, 50)));
+    public void emptyReportProducesOnlyTheMetaLine() {
+        assertEquals("{\"type\":\"meta\",\"thresholdMs\":50,\"dropped\":0}\n",
+                render(new Report(Arrays.asList(), 0, 50)));
     }
 }

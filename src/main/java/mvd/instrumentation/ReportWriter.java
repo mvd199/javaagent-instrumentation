@@ -27,10 +27,6 @@ final class ReportWriter {
     }
 
     void write(Report report) {
-        // The text header shows dropped calls; JSON lines have nowhere to put them.
-        if (report.dropped > 0 && config.format == ReportFormat.JSON) {
-            AgentLogger.LOG.warn("dropped " + report.dropped + " calls exceeding maxEvents (" + config.maxEvents + ")");
-        }
         PrintWriter out = null;
         boolean error = false;
         try {
