@@ -36,29 +36,20 @@ public class ReportWriterTest {
 
         String content = new String(Files.readAllBytes(output.toPath()), StandardCharsets.UTF_8);
         assertTrue(content, content.contains("\"method\":\"a.B.slow()\""));
-        assertEquals(1, content.split("\\R").length);
+        assertEquals(2, content.split("\\R").length);
     }
 
     @Test
-    public void printsDroppedCallsToStderrInJsonFormat() throws Exception {
-        java.io.PrintStream originalErr = System.err;
-        java.io.ByteArrayOutputStream errBytes = new java.io.ByteArrayOutputStream();
-        System.setErr(new java.io.PrintStream(errBytes));
-        try {
-            File output = new File(folder.getRoot(), "report.jsonl");
-            CoreRecorder recorder = new CoreRecorder(0, 1);
-            recorder.record("a.B.first()", System.nanoTime() - 20_000_000L, 0);
-            recorder.record("a.B.second()", System.nanoTime() - 20_000_000L, 0);
+    public void jsonMetaLineCarriesDroppedCalls() throws Exception {
+        File output = new File(folder.getRoot(), "report.jsonl");
+        CoreRecorder recorder = new CoreRecorder(0, 1);
+        recorder.record("a.B.first()", System.nanoTime() - 20_000_000L, 0);
+        recorder.record("a.B.second()", System.nanoTime() - 20_000_000L, 0);
 
-            new ReportWriter(jsonConfig(output, "1")).write(recorder.snapshot());
+        new ReportWriter(jsonConfig(output, "1")).write(recorder.snapshot());
 
-            String errOutput = errBytes.toString();
-            assertTrue(errOutput, errOutput.contains("DurationAgent:"));
-            assertTrue(errOutput, errOutput.contains("[WARN]"));
-            assertTrue(errOutput, errOutput.contains("dropped 1 calls exceeding maxEvents (1)"));
-        } finally {
-            System.setErr(originalErr);
-        }
+        String content = new String(Files.readAllBytes(output.toPath()), StandardCharsets.UTF_8);
+        assertTrue(content, content.startsWith("{\"type\":\"meta\",\"thresholdMs\":0,\"dropped\":1}\n"));
     }
 
     @Test
