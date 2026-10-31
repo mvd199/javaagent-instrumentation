@@ -1,5 +1,6 @@
 package mvd.instrumentation;
 
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Locale;
@@ -20,15 +21,27 @@ final class ReportOutput {
         this.file = file;
     }
 
-    /** {@code stdout} and {@code stderr} are case-insensitive; anything else is a file path. */
-    static ReportOutput parse(String value) {
+    /**
+     * {@code stdout} and {@code stderr} are case-insensitive; anything else is a file path. Empty if the value is not
+     * a legal path on this platform.
+     */
+    static Optional<ReportOutput> parse(String value) {
         if ("stdout".equalsIgnoreCase(value)) {
-            return STDOUT;
+            return Optional.of(STDOUT);
         }
         if ("stderr".equalsIgnoreCase(value)) {
-            return STDERR;
+            return Optional.of(STDERR);
         }
-        return new ReportOutput(Kind.FILE, Optional.of(Paths.get(value)));
+        try {
+            return Optional.of(new ReportOutput(Kind.FILE, Optional.of(Paths.get(value))));
+        } catch (InvalidPathException e) {
+            return Optional.empty();
+        }
+    }
+
+    /** What {@link #parse} accepts, for error messages and usage text. */
+    static String usage() {
+        return "stdout, stderr or a file path";
     }
 
     @Override

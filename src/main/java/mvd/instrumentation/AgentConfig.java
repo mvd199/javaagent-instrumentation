@@ -46,11 +46,10 @@ final class AgentConfig {
         // The range check guarantees the cast to int is safe.
         int maxEvents = (int) requireInRange(MAX_EVENTS_PROPERTY,
                 readLong(properties, MAX_EVENTS_PROPERTY).orElse(DEFAULT_MAX_EVENTS), 1, Integer.MAX_VALUE);
-        ReportFormat format = readString(properties, FORMAT_PROPERTY).map(value -> ReportFormat.parse(value)
-                .orElseThrow(() -> new IllegalArgumentException(FORMAT_PROPERTY + " must be text or json: " + value)))
+        ReportFormat format = read(properties, FORMAT_PROPERTY, ReportFormat::parse, ReportFormat.usage())
                 .orElse(DEFAULT_FORMAT);
-        ReportOutput output = readString(properties, OUTPUT_PROPERTY)
-                .map(ReportOutput::parse).orElse(DEFAULT_OUTPUT);
+        ReportOutput output = read(properties, OUTPUT_PROPERTY, ReportOutput::parse, ReportOutput.usage())
+                .orElse(DEFAULT_OUTPUT);
         return new AgentConfig(threshold, maxEvents, format, output);
     }
 
@@ -68,16 +67,28 @@ final class AgentConfig {
         try {
             return OptionalLong.of(Long.parseLong(raw.get()));
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(name + " must be an integer: " + raw.get());
+            throw invalid(name, "an integer", raw.get());
         }
+    }
+
+    /** Reading only: empty when unset or blank, throws if {@code parser} rejects the value. */
+    private static <T> Optional<T> read(Function<String, String> properties, String name,
+                                        Function<String, Optional<T>> parser, String usage) {
+        return readString(properties, name)
+                .map(value -> parser.apply(value).orElseThrow(() -> invalid(name, usage, value)));
     }
 
     /** Validation only: throws, naming the property, when the value is outside [min, max]. */
     private static long requireInRange(String name, long value, long min, long max) {
         if (value < min || value > max) {
             String range = max == Long.MAX_VALUE ? "at least " + min : "between " + min + " and " + max;
-            throw new IllegalArgumentException(name + " must be " + range + ": " + value);
+            throw invalid(name, range, value);
         }
         return value;
+    }
+
+    /** Every invalid value is reported as {@code <property> must be <usage>: <value>}. */
+    private static IllegalArgumentException invalid(String name, String usage, Object value) {
+        return new IllegalArgumentException(name + " must be " + usage + ": " + value);
     }
 }

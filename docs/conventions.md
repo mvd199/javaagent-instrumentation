@@ -23,7 +23,11 @@ Rules:
 
 `AgentConfig` only reads system properties and validates them, so an instance is always well formed. It never creates components. `DurationAgent.premain` builds the components (recorder, writer, transformer) from the config.
 
-Reading and validation are separate steps: `readString` and `readLong` only read and apply defaults, and `requireInRange` only validates. Invalid values throw an `IllegalArgumentException` at startup, with messages in the form `<property> must be <rule>: <value>`.
+Reading and validation are separate steps: `readString`, `readLong` and `read` only read (empty when a property is unset or blank, so `.orElse(DEFAULT_…)` applies the typed default), and `requireInRange` only validates. A property that is set but invalid stops startup with an `IllegalArgumentException` built by `invalid(...)`, always in the form `<property> must be <usage>: <value>`.
+
+A type parsed from a property (`ReportFormat`, `ReportOutput`) provides two static methods and knows nothing about properties:
+* `static Optional<T> parse(String)`: empty when the value is not valid. It never throws.
+* `static String usage()`: what `parse` accepts, phrased to complete "must be …", e.g. `text or json`. Enums build it from `values()`, so adding a constant updates the message.
 
 ## Hot path
 

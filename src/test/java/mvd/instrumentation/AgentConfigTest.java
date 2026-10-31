@@ -104,6 +104,17 @@ public class AgentConfigTest {
     }
 
     @Test
+    public void rejectsIllegalOutputPathNamingWhatIsAccepted() {
+        assertMessage("mvd.instrumentation.report.output must be stdout, stderr or a file path: bad\u0000path",
+                AgentConfig.OUTPUT_PROPERTY, "bad\u0000path");
+    }
+
+    @Test
+    public void formatUsageListsEveryFormat() {
+        assertEquals("text or json", ReportFormat.usage());
+    }
+
+    @Test
     public void standardStreamsHaveNoFile() {
         assertEquals(java.util.Optional.empty(), config().output.file);
         assertEquals(java.util.Optional.empty(), config(AgentConfig.OUTPUT_PROPERTY, "stderr").output.file);

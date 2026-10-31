@@ -105,7 +105,7 @@ public class ReportWriterTest {
     public void createsParentDirectoriesForFileOutput() throws Exception {
         File file = new File(folder.getRoot(), "sub/dir/report.txt");
 
-        try (java.io.PrintWriter out = ReportWriter.open(ReportOutput.parse(file.getPath()))) {
+        try (java.io.PrintWriter out = ReportWriter.open(ReportOutput.parse(file.getPath()).get())) {
             out.println("hello");
         }
 
