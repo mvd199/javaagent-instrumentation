@@ -6,12 +6,9 @@ import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Optional;
 
 /**
- * A single self-contained HTML page. It only injects data: the markup, rendering script and (replaceable) stylesheet
+ * A single self-contained HTML page. It only injects data: the markup, rendering script and stylesheet
  * are static resources, so the look can change without touching how the records are presented.
  * The page is {@code report.html} with three placeholders filled in: {@code {{STYLE}}}, {@code {{SCRIPT}}} and
  * {@code {{DATA}}} (a JSON object read by the script).
@@ -19,21 +16,12 @@ import java.util.Optional;
 final class ReportHtmlFormatter implements ReportFormatter {
     private static final String RESOURCE_DIR = "/mvd/instrumentation/";
 
-    private final Optional<Path> stylesheet;
-
-    ReportHtmlFormatter(Optional<Path> stylesheet) {
-        this.stylesheet = stylesheet;
-    }
-
     @Override
     public void write(Report report, PrintWriter out) {
         try {
-            String css = stylesheet.isPresent()
-                    ? new String(Files.readAllBytes(stylesheet.get()), StandardCharsets.UTF_8)
-                    : resource("report.css");
             // Data goes in last, so nothing in it can be mistaken for a placeholder.
             out.print(resource("report.html")
-                    .replace("{{STYLE}}", css)
+                    .replace("{{STYLE}}", resource("report.css"))
                     .replace("{{SCRIPT}}", resource("report.js"))
                     .replace("{{DATA}}", data(report)));
         } catch (IOException e) {

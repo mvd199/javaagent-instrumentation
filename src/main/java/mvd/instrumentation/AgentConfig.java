@@ -1,8 +1,5 @@
 package mvd.instrumentation;
 
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.Function;
@@ -12,14 +9,12 @@ import java.util.function.Function;
  * Pure data: the components built from it are created in {@link DurationAgent#premain}.
  * - Core agent configs: mvd.instrumentation.agent.threshold, mvd.instrumentation.agent.maxEvents
  * - Report configs: mvd.instrumentation.report.format, mvd.instrumentation.report.output,
- *   mvd.instrumentation.report.stylesheet (html format only)
  */
 final class AgentConfig {
     static final String THRESHOLD_PROPERTY = "mvd.instrumentation.agent.threshold";
     static final String MAX_EVENTS_PROPERTY = "mvd.instrumentation.agent.maxEvents";
     static final String FORMAT_PROPERTY = "mvd.instrumentation.report.format";
     static final String OUTPUT_PROPERTY = "mvd.instrumentation.report.output";
-    static final String STYLESHEET_PROPERTY = "mvd.instrumentation.report.stylesheet";
 
     static final long DEFAULT_THRESHOLD = 50L;
     /** Rejects larger thresholds so a typo such as a day in milliseconds cannot silently disable recording. */
@@ -32,16 +27,12 @@ final class AgentConfig {
     final int maxEvents;
     final ReportFormat format;
     final ReportOutput output;
-    /** CSS replacing the built-in look of the html report; empty to use the built-in one. */
-    final Optional<Path> stylesheet;
 
-    private AgentConfig(long threshold, int maxEvents, ReportFormat format, ReportOutput output,
-                        Optional<Path> stylesheet) {
+    private AgentConfig(long threshold, int maxEvents, ReportFormat format, ReportOutput output) {
         this.threshold = threshold;
         this.maxEvents = maxEvents;
         this.format = format;
         this.output = output;
-        this.stylesheet = stylesheet;
     }
 
     static AgentConfig fromSystemProperties() {
@@ -59,17 +50,7 @@ final class AgentConfig {
                 .orElse(DEFAULT_FORMAT);
         ReportOutput output = read(properties, OUTPUT_PROPERTY, ReportOutput::parse, ReportOutput.usage())
                 .orElse(DEFAULT_OUTPUT);
-        Optional<Path> stylesheet = read(properties, STYLESHEET_PROPERTY, AgentConfig::parsePath, "a file path");
-        return new AgentConfig(threshold, maxEvents, format, output, stylesheet);
-    }
-
-    /** Empty if the value is not a legal path on this platform. */
-    private static Optional<Path> parsePath(String value) {
-        try {
-            return Optional.of(Paths.get(value));
-        } catch (InvalidPathException e) {
-            return Optional.empty();
-        }
+        return new AgentConfig(threshold, maxEvents, format, output);
     }
 
     /** Reading only: the trimmed value, or empty when unset or blank. */

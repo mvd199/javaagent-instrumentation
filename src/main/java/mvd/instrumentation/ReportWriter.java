@@ -21,7 +21,7 @@ final class ReportWriter {
     private static ReportFormatter formatterFor(AgentConfig config) {
         switch (config.format) {
             case JSON: return new ReportJsonFormatter();
-            case HTML: return new ReportHtmlFormatter(config.stylesheet);
+            case HTML: return new ReportHtmlFormatter();
             default: return new ReportTextFormatter();
         }
     }

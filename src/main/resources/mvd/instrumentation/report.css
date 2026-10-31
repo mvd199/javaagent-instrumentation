@@ -1,4 +1,4 @@
-/* Built-in look. Replace it with -Dmvd.instrumentation.report.stylesheet=<file>; class names are listed in report.js. */
+/* Look of the html report. Rendering logic is in report.js, which lists the class names styled here. */
 :root { --bg: #f7f8fa; --fg: #1f2933; --muted: #7b8794; --card: #fff; --line: #e4e7eb; --accent: #3b82f6; --hot: #ef4444; }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #11151a; --fg: #e6e9ee; --muted: #8a94a3; --card: #1a2028; --line: #2a323d; }

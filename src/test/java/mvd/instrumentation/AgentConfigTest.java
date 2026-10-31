@@ -6,7 +6,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -87,12 +86,8 @@ public class AgentConfigTest {
     }
 
     @Test
-    public void readsHtmlFormatAndStylesheet() {
-        AgentConfig config = config(AgentConfig.FORMAT_PROPERTY, "HTML", AgentConfig.STYLESHEET_PROPERTY, "/tmp/my.css");
-
-        assertEquals(ReportFormat.HTML, config.format);
-        assertEquals(java.nio.file.Paths.get("/tmp/my.css"), config.stylesheet.get());
-        assertFalse(config().stylesheet.isPresent());
+    public void readsHtmlFormat() {
+        assertEquals(ReportFormat.HTML, config(AgentConfig.FORMAT_PROPERTY, "HTML").format);
     }
 
     @Test
