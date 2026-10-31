@@ -15,14 +15,18 @@ final class ReportWriter {
 
     ReportWriter(AgentConfig config) {
         this.config = config;
-        this.formatter = config.format == ReportFormat.JSON ? new ReportJsonFormatter() : new ReportTextFormatter();
+        this.formatter = formatterFor(config);
+    }
+
+    private static ReportFormatter formatterFor(AgentConfig config) {
+        switch (config.format) {
+            case JSON: return new ReportJsonFormatter();
+            case HTML: return new ReportHtmlFormatter();
+            default: return new ReportTextFormatter();
+        }
     }
 
     void write(Report report) {
-        // The text header shows dropped calls; JSON lines have nowhere to put them.
-        if (report.dropped > 0 && config.format == ReportFormat.JSON) {
-            AgentLogger.LOG.warn("dropped " + report.dropped + " calls exceeding maxEvents (" + config.maxEvents + ")");
-        }
         PrintWriter out = null;
         boolean error = false;
         try {

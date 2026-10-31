@@ -86,6 +86,11 @@ public class AgentConfigTest {
     }
 
     @Test
+    public void readsHtmlFormat() {
+        assertEquals(ReportFormat.HTML, config(AgentConfig.FORMAT_PROPERTY, "HTML").format);
+    }
+
+    @Test
     public void blankValuesFallBackToDefaults() {
         AgentConfig config = config(AgentConfig.FORMAT_PROPERTY, " ", AgentConfig.MAX_EVENTS_PROPERTY, "");
 
@@ -111,7 +116,7 @@ public class AgentConfigTest {
 
     @Test
     public void formatUsageListsEveryFormat() {
-        assertEquals("text or json", ReportFormat.usage());
+        assertEquals("text, json or html", ReportFormat.usage());
     }
 
     @Test
@@ -139,7 +144,7 @@ public class AgentConfigTest {
     @Test
     public void errorMessagesNameThePropertyAndValue() {
         assertMessage("mvd.instrumentation.agent.threshold must be between 0 and 180000: -5", AgentConfig.THRESHOLD_PROPERTY, "-5");
-        assertMessage("mvd.instrumentation.report.format must be text or json: xml", AgentConfig.FORMAT_PROPERTY, "xml");
+        assertMessage("mvd.instrumentation.report.format must be text, json or html: xml", AgentConfig.FORMAT_PROPERTY, "xml");
         assertMessage("mvd.instrumentation.agent.maxEvents must be an integer: lots", AgentConfig.MAX_EVENTS_PROPERTY, "lots");
     }
 
