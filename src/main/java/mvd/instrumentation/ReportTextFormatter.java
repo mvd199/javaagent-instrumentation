@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Human-readable report: top methods by total time, then a call tree per thread. */
-final class ReportSummaryFormatter implements ReportFormatter {
+final class ReportTextFormatter implements ReportFormatter {
     static final int TOP_METHODS = 10;
     static final int MAX_TREE_LINES_PER_THREAD = 200;
 

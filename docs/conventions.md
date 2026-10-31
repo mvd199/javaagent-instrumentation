@@ -10,7 +10,7 @@ Instead of subpackages, a class name prefix shows which part of the agent a clas
 |---|---|---|
 | `Agent*`, `DurationAgent` | Entry point, configuration and shared utilities | `DurationAgent`, `AgentConfig`, `AgentLogger` |
 | `Core*` | Instrumentation and recording: everything that runs while the application runs | `CoreTransformer`, `CoreClassFilter`, `CoreCallTracker`, `CoreCallback`, `CoreRecorder` |
-| `Report*` | The report written at shutdown: its data, formats and output | `Report`, `ReportRecord`, `ReportFormat`, `ReportOutput`, `ReportFormatter`, `ReportJsonFormatter`, `ReportSummaryFormatter`, `ReportWriter` |
+| `Report*` | The report written at shutdown: its data, formats and output | `Report`, `ReportRecord`, `ReportFormat`, `ReportOutput`, `ReportFormatter`, `ReportJsonFormatter`, `ReportTextFormatter`, `ReportWriter` |
 
 Rules:
 * A new class takes the prefix of the part it belongs to. Tests follow the class they test (`CoreRecorderTest`).

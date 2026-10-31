@@ -15,11 +15,11 @@ final class ReportWriter {
 
     ReportWriter(AgentConfig config) {
         this.config = config;
-        this.formatter = config.format == ReportFormat.JSON ? new ReportJsonFormatter() : new ReportSummaryFormatter();
+        this.formatter = config.format == ReportFormat.JSON ? new ReportJsonFormatter() : new ReportTextFormatter();
     }
 
     void write(Report report) {
-        // The summary header shows dropped calls; JSON lines have nowhere to put them.
+        // The text header shows dropped calls; JSON lines have nowhere to put them.
         if (report.dropped > 0 && config.format == ReportFormat.JSON) {
             AgentLogger.LOG.warn("dropped " + report.dropped + " calls exceeding maxEvents (" + config.maxEvents + ")");
         }
@@ -61,11 +61,12 @@ final class ReportWriter {
             case STDERR:
                 return nonClosing(System.err);
             default:
-                Path parent = output.file.getParent();
+                Path file = output.file().get();
+                Path parent = file.getParent();
                 if (parent != null) {
                     Files.createDirectories(parent);
                 }
-                return new PrintWriter(Files.newBufferedWriter(output.file, StandardCharsets.UTF_8));
+                return new PrintWriter(Files.newBufferedWriter(file, StandardCharsets.UTF_8));
         }
     }
 

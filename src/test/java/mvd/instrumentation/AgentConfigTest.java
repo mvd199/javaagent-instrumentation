@@ -23,7 +23,7 @@ public class AgentConfigTest {
         AgentConfig config = config();
 
         assertEquals(50L, config.threshold);
-        assertEquals(ReportFormat.SUMMARY, config.format);
+        assertEquals(ReportFormat.TEXT, config.format);
         assertEquals(ReportOutput.STDOUT, config.output);
         assertEquals(100_000, config.maxEvents);
     }
@@ -69,7 +69,7 @@ public class AgentConfigTest {
     public void ignoresRemovedDurationProperties() {
         AgentConfig config = AgentConfig.from(property -> property.startsWith("duration.") ? "json" : null);
 
-        assertEquals(ReportFormat.SUMMARY, config.format);
+        assertEquals(ReportFormat.TEXT, config.format);
     }
 
     @Test
@@ -81,7 +81,7 @@ public class AgentConfigTest {
 
         assertEquals(ReportFormat.JSON, config.format);
         assertEquals(ReportOutput.Kind.FILE, config.output.kind);
-        assertEquals(java.nio.file.Paths.get("/tmp/duration.jsonl"), config.output.file);
+        assertEquals(java.nio.file.Paths.get("/tmp/duration.jsonl"), config.output.file().get());
         assertEquals(500, config.maxEvents);
     }
 
@@ -89,13 +89,24 @@ public class AgentConfigTest {
     public void blankValuesFallBackToDefaults() {
         AgentConfig config = config(AgentConfig.FORMAT_PROPERTY, " ", AgentConfig.MAX_EVENTS_PROPERTY, "");
 
-        assertEquals(ReportFormat.SUMMARY, config.format);
+        assertEquals(ReportFormat.TEXT, config.format);
         assertEquals(100_000, config.maxEvents);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void rejectsUnknownFormat() {
         config(AgentConfig.FORMAT_PROPERTY, "xml");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsRemovedSummaryFormat() {
+        config(AgentConfig.FORMAT_PROPERTY, "summary");
+    }
+
+    @Test
+    public void standardStreamsHaveNoFile() {
+        assertEquals(java.util.Optional.empty(), config().output.file());
+        assertEquals(java.util.Optional.empty(), config(AgentConfig.OUTPUT_PROPERTY, "stderr").output.file());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -117,7 +128,7 @@ public class AgentConfigTest {
     @Test
     public void errorMessagesNameThePropertyAndValue() {
         assertMessage("mvd.instrumentation.agent.threshold must be between 0 and 180000: -5", AgentConfig.THRESHOLD_PROPERTY, "-5");
-        assertMessage("mvd.instrumentation.report.format must be summary or json: xml", AgentConfig.FORMAT_PROPERTY, "xml");
+        assertMessage("mvd.instrumentation.report.format must be text or json: xml", AgentConfig.FORMAT_PROPERTY, "xml");
         assertMessage("mvd.instrumentation.agent.maxEvents must be an integer: lots", AgentConfig.MAX_EVENTS_PROPERTY, "lots");
     }
 

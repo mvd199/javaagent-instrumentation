@@ -1,6 +1,7 @@
 package mvd.instrumentation;
 
-import java.util.Locale;
+import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.function.Function;
 
 /**
@@ -18,9 +19,9 @@ final class AgentConfig {
     static final long DEFAULT_THRESHOLD = 50L;
     /** Rejects larger thresholds so a typo such as a day in milliseconds cannot silently disable recording. */
     static final long MAX_THRESHOLD = 180_000L;
-    static final String DEFAULT_FORMAT = "summary";
-    static final String DEFAULT_OUTPUT = "stdout";
     static final int DEFAULT_MAX_EVENTS = 100_000;
+    static final ReportFormat DEFAULT_FORMAT = ReportFormat.TEXT;
+    static final ReportOutput DEFAULT_OUTPUT = ReportOutput.STDOUT;
 
     final long threshold;
     final int maxEvents;
@@ -38,33 +39,36 @@ final class AgentConfig {
         return from(System::getProperty);
     }
 
+    /** Unset or blank properties take their default; set but invalid ones throw, naming the property. */
     static AgentConfig from(Function<String, String> properties) {
         long threshold = requireInRange(THRESHOLD_PROPERTY,
-                readLong(properties, THRESHOLD_PROPERTY, DEFAULT_THRESHOLD), 0, MAX_THRESHOLD);
+                readLong(properties, THRESHOLD_PROPERTY).orElse(DEFAULT_THRESHOLD), 0, MAX_THRESHOLD);
         // The range check guarantees the cast to int is safe.
         int maxEvents = (int) requireInRange(MAX_EVENTS_PROPERTY,
-                readLong(properties, MAX_EVENTS_PROPERTY, DEFAULT_MAX_EVENTS), 1, Integer.MAX_VALUE);
-        ReportFormat format = parseFormat(readString(properties, FORMAT_PROPERTY, DEFAULT_FORMAT));
-        ReportOutput output = ReportOutput.parse(readString(properties, OUTPUT_PROPERTY, DEFAULT_OUTPUT));
+                readLong(properties, MAX_EVENTS_PROPERTY).orElse(DEFAULT_MAX_EVENTS), 1, Integer.MAX_VALUE);
+        ReportFormat format = readString(properties, FORMAT_PROPERTY).map(value -> ReportFormat.parse(value)
+                .orElseThrow(() -> new IllegalArgumentException(FORMAT_PROPERTY + " must be text or json: " + value)))
+                .orElse(DEFAULT_FORMAT);
+        ReportOutput output = readString(properties, OUTPUT_PROPERTY)
+                .map(ReportOutput::parse).orElse(DEFAULT_OUTPUT);
         return new AgentConfig(threshold, maxEvents, format, output);
     }
 
-    /** Reading only: returns the default when unset or blank, otherwise the trimmed value. */
-    private static String readString(Function<String, String> properties, String name, String defaultValue) {
-        String raw = properties.apply(name);
-        return raw == null || raw.trim().isEmpty() ? defaultValue : raw.trim();
+    /** Reading only: the trimmed value, or empty when unset or blank. */
+    private static Optional<String> readString(Function<String, String> properties, String name) {
+        return Optional.ofNullable(properties.apply(name)).map(String::trim).filter(value -> !value.isEmpty());
     }
 
-    /** Reading only: returns the default when unset or blank, throws if the value is not a number. */
-    private static long readLong(Function<String, String> properties, String name, long defaultValue) {
-        String raw = readString(properties, name, null);
-        if (raw == null) {
-            return defaultValue;
+    /** Reading only: empty when unset or blank, throws if the value is not a number. */
+    private static OptionalLong readLong(Function<String, String> properties, String name) {
+        Optional<String> raw = readString(properties, name);
+        if (!raw.isPresent()) {
+            return OptionalLong.empty();
         }
         try {
-            return Long.parseLong(raw);
+            return OptionalLong.of(Long.parseLong(raw.get()));
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(name + " must be an integer: " + raw);
+            throw new IllegalArgumentException(name + " must be an integer: " + raw.get());
         }
     }
 
@@ -75,13 +79,5 @@ final class AgentConfig {
             throw new IllegalArgumentException(name + " must be " + range + ": " + value);
         }
         return value;
-    }
-
-    private static ReportFormat parseFormat(String value) {
-        try {
-            return ReportFormat.valueOf(value.toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException(FORMAT_PROPERTY + " must be summary or json: " + value);
-        }
     }
 }

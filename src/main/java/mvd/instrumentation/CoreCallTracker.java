@@ -13,6 +13,8 @@ public final class CoreCallTracker {
     private CoreCallTracker() {
     }
 
+    // TODO: allow install() only once, e.g. compareAndSet on an AtomicReference holding the callback. Needs a way
+    //  for tests to swap callbacks without a reset method in production code; see PR #8 review.
     static void install(CoreCallback callback) {
         CoreCallTracker.callback = callback;
     }

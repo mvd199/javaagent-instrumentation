@@ -3,6 +3,7 @@ package mvd.instrumentation;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Locale;
+import java.util.Optional;
 
 /** Where the report goes: stdout, stderr or a file. */
 final class ReportOutput {
@@ -12,8 +13,7 @@ final class ReportOutput {
     static final ReportOutput STDERR = new ReportOutput(Kind.STDERR, null);
 
     final Kind kind;
-    /** Only set for {@link Kind#FILE}. */
-    final Path file;
+    private final Path file;
 
     private ReportOutput(Kind kind, Path file) {
         this.kind = kind;
@@ -29,6 +29,11 @@ final class ReportOutput {
             return STDERR;
         }
         return new ReportOutput(Kind.FILE, Paths.get(value));
+    }
+
+    /** Present only for {@link Kind#FILE}. */
+    Optional<Path> file() {
+        return Optional.ofNullable(file);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package mvd.instrumentation;
 
+import java.util.ArrayList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +37,7 @@ final class CoreRecorder {
     Report snapshot() {
         long total = totalSlowCalls.get();
         long dropped = Math.max(0L, total - maxEvents);
-        return new Report(records, dropped, thresholdMs);
+        // Copy: never hand out the live queue, which other threads may still be adding to.
+        return new Report(new ArrayList<>(records), dropped, thresholdMs);
     }
 }

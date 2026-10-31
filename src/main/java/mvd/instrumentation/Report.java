@@ -16,7 +16,7 @@ final class Report {
     final long dropped;
     final long thresholdMs;
 
-    /** Copies {@code records}, so the report does not change when the recorder keeps recording. */
+    /** Copies {@code records}, so the report stays immutable whatever the caller does with its list. */
     Report(Collection<ReportRecord> records, long dropped, long thresholdMs) {
         this.records = Collections.unmodifiableList(new ArrayList<>(records));
         this.dropped = dropped;

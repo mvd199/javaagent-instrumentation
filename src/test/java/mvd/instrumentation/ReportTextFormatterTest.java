@@ -12,7 +12,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class ReportSummaryFormatterTest {
+public class ReportTextFormatterTest {
     private static final long MS = 1_000_000L;
 
     private static ReportRecord call(String thread, String method, long startMs, long durationMs, int depth) {
@@ -22,7 +22,7 @@ public class ReportSummaryFormatterTest {
     private static String render(Report report) {
         StringWriter text = new StringWriter();
         PrintWriter out = new PrintWriter(text);
-        new ReportSummaryFormatter().write(report, out);
+        new ReportTextFormatter().write(report, out);
         out.flush();
         return text.toString();
     }
@@ -118,7 +118,7 @@ public class ReportSummaryFormatterTest {
     @Test
     public void callTreeIsCappedPerThreadWithAMoreLine() {
         List<ReportRecord> records = new ArrayList<>();
-        int total = ReportSummaryFormatter.MAX_TREE_LINES_PER_THREAD + 5;
+        int total = ReportTextFormatter.MAX_TREE_LINES_PER_THREAD + 5;
         for (int i = 0; i < total; i++) {
             records.add(call("main", "a.B.m()", i, 60, 0));
         }
@@ -126,7 +126,7 @@ public class ReportSummaryFormatterTest {
         List<String> lines = lines(render(new Report(records, 0, 50)));
 
         long treeLines = lines.stream().filter(l -> l.startsWith("  [")).count();
-        assertEquals(ReportSummaryFormatter.MAX_TREE_LINES_PER_THREAD, treeLines);
+        assertEquals(ReportTextFormatter.MAX_TREE_LINES_PER_THREAD, treeLines);
         assertTrue(lines.contains("  ... 5 more"));
     }
 
