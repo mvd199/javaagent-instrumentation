@@ -4,15 +4,21 @@ import java.io.PrintWriter;
 import java.util.Locale;
 
 /**
- * JSON lines (always {@code \n}-terminated, whatever the platform), one object per slow call, ordered so parents precede their children.
+ * JSON lines (always {@code \n}-terminated, whatever the platform). The first line is a {@code meta} object with the
+ * report-level fields; one {@code call} object per slow call follows, ordered so parents precede their children.
+ * Also the data model embedded in the HTML report, so both formats carry the same thing.
  */
 final class ReportJsonFormatter implements ReportFormatter {
     @Override
     public void write(Report report, PrintWriter out) {
         StringBuilder sb = new StringBuilder();
+        sb.append("{\"type\":\"meta\",\"thresholdMs\":").append(report.thresholdMs);
+        sb.append(",\"dropped\":").append(report.dropped);
+        sb.append("}\n");
+        out.print(sb.toString());
         for (ReportRecord call : report.inCallOrder()) {
             sb.setLength(0);
-            sb.append("{\"timestamp\":").append(call.timestampMillis);
+            sb.append("{\"type\":\"call\",\"timestamp\":").append(call.timestampMillis);
             sb.append(",\"thread\":");
             quote(call.thread, sb);
             sb.append(",\"method\":");
