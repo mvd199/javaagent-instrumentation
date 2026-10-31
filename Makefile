@@ -1,4 +1,5 @@
-IMAGE     ?= maven:3-eclipse-temurin-11
+# Pinned so every run uses the same Maven (and so the same default plugins); bump deliberately.
+IMAGE     ?= maven:3.10.0-eclipse-temurin-11
 M2_CACHE  ?= $(HOME)/.m2
 WORKSPACE ?= $(shell pwd)
 JAVA_OPTS ?=

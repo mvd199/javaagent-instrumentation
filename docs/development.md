@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-The [`Makefile`](../Makefile) runs Maven inside a Docker container (`maven:3-eclipse-temurin-11`), so you don't need Java or Maven installed. Start Docker or Colima first:
+The [`Makefile`](../Makefile) runs Maven inside a Docker container (`maven:3.10.0-eclipse-temurin-11`, pinned so every run uses the same Maven; override with `make IMAGE=...`), so you don't need Java or Maven installed. Start Docker or Colima first:
 
 ```bash
 colima start
