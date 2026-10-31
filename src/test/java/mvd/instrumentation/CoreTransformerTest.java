@@ -1,5 +1,6 @@
 package mvd.instrumentation;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -16,9 +17,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class DurationTransformerTest {
+public class CoreTransformerTest {
     private static final String TARGET = "mvd/instrumentation/SampleTarget";
-    private static final ClassLoader LOADER = DurationTransformerTest.class.getClassLoader();
+    private static final ClassLoader LOADER = CoreTransformerTest.class.getClassLoader();
 
     private final List<String> reportedMethods = new ArrayList<>();
     private final List<Long> reportedStartTimes = new ArrayList<>();
@@ -29,16 +30,21 @@ public class DurationTransformerTest {
         reportedStartTimes.clear();
     }
 
+    @After
+    public void uninstallCallback() {
+        CoreCallTracker.install((method, start, depth) -> { });
+    }
+
     @Test
     public void returnsNullForClassesOutsideWhitelist() throws Exception {
-        DurationTransformer transformer = transformerAllowing(name -> false);
+        CoreTransformer transformer = transformerAllowing(name -> false);
 
         assertNull(transformer.transform(LOADER, TARGET, null, null, classBytes(TARGET)));
     }
 
     @Test
     public void returnsNullForBootstrapClasses() throws Exception {
-        DurationTransformer transformer = transformerAllowing(name -> true);
+        CoreTransformer transformer = transformerAllowing(name -> true);
 
         assertNull(transformer.transform(null, TARGET, null, null, classBytes(TARGET)));
     }
@@ -120,28 +126,29 @@ public class DurationTransformerTest {
     }
 
     @Test
-    public void currentDepthInsideCallbackCountsActiveInstrumentedFrames() throws Exception {
+    public void callbackDepthCountsActiveInstrumentedFrames() throws Exception {
         List<Integer> depths = new ArrayList<>();
-        Object target = instrumentedInstance((method, start) -> depths.add(DurationTransformer.currentDepth()));
+        Object target = instrumentedInstance((method, start, depth) -> depths.add(depth));
 
         target.getClass().getMethod("recurse", int.class).invoke(target, 2);
 
         // Completion order is innermost first: recurse(0) has 2 active parents, the outermost call has none.
         assertEquals(java.util.Arrays.asList(2, 1, 0), depths);
-        assertEquals(0, DurationTransformer.currentDepth());
     }
 
     @Test
-    public void currentDepthIsRestoredAfterAnException() throws Exception {
-        Object target = instrumentedInstance((method, start) -> { });
+    public void depthIsRestoredAfterAnException() throws Exception {
+        List<Integer> depths = new ArrayList<>();
+        Object target = instrumentedInstance((method, start, depth) -> depths.add(depth));
 
         try {
             target.getClass().getMethod("fail").invoke(target);
         } catch (java.lang.reflect.InvocationTargetException expected) {
             // the fixture throws on purpose
         }
+        target.getClass().getMethod("add", int.class, int.class).invoke(target, 2, 3);
 
-        assertEquals(0, DurationTransformer.currentDepth());
+        assertEquals(java.util.Arrays.asList(0, 0), depths);
     }
 
     @Test
@@ -165,77 +172,26 @@ public class DurationTransformerTest {
         }
     }
 
-    @Test
-    public void longStackReturnsSentinelWhenEmpty() {
-        DurationTransformer.LongStack stack = new DurationTransformer.LongStack();
-        assertEquals(0, stack.size());
-        assertEquals(32, stack.capacity());
-        assertEquals(DurationTransformer.LongStack.SENTINEL, stack.pop());
-        assertEquals(0, stack.size());
+    private static CoreTransformer transformerAllowing(Predicate<String> whitelist) {
+        return new CoreTransformer(whitelist);
     }
 
-    @Test
-    public void longStackPushesAndPopsInLifoOrder() {
-        DurationTransformer.LongStack stack = new DurationTransformer.LongStack();
-        stack.push(100L);
-        stack.push(200L);
-        stack.push(300L);
-
-        assertEquals(3, stack.size());
-        assertEquals(300L, stack.pop());
-        assertEquals(200L, stack.pop());
-        assertEquals(100L, stack.pop());
-        assertEquals(DurationTransformer.LongStack.SENTINEL, stack.pop());
-    }
-
-    @Test
-    public void longStackExpandsCapacityBeyondInitial32() {
-        DurationTransformer.LongStack stack = new DurationTransformer.LongStack();
-        for (int i = 0; i < 40; i++) {
-            stack.push((long) i);
-        }
-
-        assertTrue("Capacity should expand beyond 32", stack.capacity() > 32);
-        assertEquals(40, stack.size());
-
-        for (int i = 39; i >= 0; i--) {
-            assertEquals((long) i, stack.pop());
-        }
-        assertEquals(DurationTransformer.LongStack.SENTINEL, stack.pop());
-    }
-
-    @Test
-    public void popAndRegisterStartTimeIgnoresSentinel() {
-        // The transformer is created only for its side effect: its constructor installs the static
-        // callback that popAndRegisterStartTime() would invoke if it did not ignore the sentinel.
-        transformerAllowing(TARGET::equals);
-        // Pop without any preceding push: should hit SENTINEL and ignore callback
-        DurationTransformer.popAndRegisterStartTime("unmatched.Method");
-        assertTrue("Callback should not be invoked when popping sentinel", reportedMethods.isEmpty());
-    }
-
-    private DurationTransformer transformerAllowing(Predicate<String> whitelist) {
-        return new DurationTransformer(whitelist, (method, start) -> {
-            reportedMethods.add(method);
-            reportedStartTimes.add(start);
-        });
-    }
-
-    private static DurationCallback throwingCallback() {
-        return (method, start) -> {
+    private static CoreCallback throwingCallback() {
+        return (method, start, depth) -> {
             throw new RuntimeException("callback failure");
         };
     }
 
     private Object instrumentedInstance() throws Exception {
-        return instrumentedInstance((method, start) -> {
+        return instrumentedInstance((method, start, depth) -> {
             reportedMethods.add(method);
             reportedStartTimes.add(start);
         });
     }
 
-    private Object instrumentedInstance(DurationCallback callback) throws Exception {
-        byte[] transformed = new DurationTransformer(TARGET::equals, callback)
+    private Object instrumentedInstance(CoreCallback callback) throws Exception {
+        CoreCallTracker.install(callback);
+        byte[] transformed = new CoreTransformer(TARGET::equals)
                 .transform(LOADER, TARGET, null, null, classBytes(TARGET));
         assertNotNull(transformed);
         return new SingleClassLoader(TARGET.replace('/', '.'), transformed, getClass().getClassLoader())
@@ -245,7 +201,7 @@ public class DurationTransformerTest {
     }
 
     private static byte[] classBytes(String internalName) throws IOException {
-        try (InputStream in = DurationTransformerTest.class.getClassLoader()
+        try (InputStream in = CoreTransformerTest.class.getClassLoader()
                 .getResourceAsStream(internalName + ".class")) {
             assertNotNull("Class file not found: " + internalName, in);
             ByteArrayOutputStream out = new ByteArrayOutputStream();

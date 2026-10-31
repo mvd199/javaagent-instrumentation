@@ -9,20 +9,20 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-public class JsonReporterTest {
+public class ReportJsonFormatterTest {
     private static String render(Report report) {
         StringWriter text = new StringWriter();
         PrintWriter out = new PrintWriter(text);
-        new JsonReporter().write(report, out);
+        new ReportJsonFormatter().write(report, out);
         out.flush();
         return text.toString();
     }
 
     @Test
     public void writesOneObjectPerLineParentsFirst() {
-        List<CallRecord> records = Arrays.asList(
-                new CallRecord(2_000_000L, 1696871234100L, "main", "a.B.child()", 90, 1),
-                new CallRecord(1_000_000L, 1696871234000L, "main", "a.B.parent()", 120, 0));
+        List<ReportRecord> records = Arrays.asList(
+                new ReportRecord(2_000_000L, 1696871234100L, "main", "a.B.child()", 90, 1),
+                new ReportRecord(1_000_000L, 1696871234000L, "main", "a.B.parent()", 120, 0));
 
         String[] lines = render(new Report(records, 0, 50)).split("\\R");
 
@@ -33,8 +33,8 @@ public class JsonReporterTest {
 
     @Test
     public void escapesSpecialCharacters() {
-        List<CallRecord> records = Arrays.asList(
-                new CallRecord(1L, 1L, "t\"1\\", "a.B.m(java.lang.String[])\n\u0001", 60, 0));
+        List<ReportRecord> records = Arrays.asList(
+                new ReportRecord(1L, 1L, "t\"1\\", "a.B.m(java.lang.String[])\n\u0001", 60, 0));
 
         String line = render(new Report(records, 0, 50)).trim();
 
@@ -43,7 +43,7 @@ public class JsonReporterTest {
 
     @Test
     public void doesNotIncludeDroppedCountInJsonOutput() {
-        List<CallRecord> records = Arrays.asList(new CallRecord(1L, 1L, "main", "a.B.m()", 60, 0));
+        List<ReportRecord> records = Arrays.asList(new ReportRecord(1L, 1L, "main", "a.B.m()", 60, 0));
 
         String[] output = render(new Report(records, 7, 50)).split("\\R");
 
@@ -53,9 +53,9 @@ public class JsonReporterTest {
 
     @Test
     public void linesEndWithNewlineRegardlessOfPlatform() {
-        List<CallRecord> records = Arrays.asList(
-                new CallRecord(1L, 1L, "main", "a.B.m1()", 60, 0),
-                new CallRecord(2L, 2L, "main", "a.B.m2()", 70, 0));
+        List<ReportRecord> records = Arrays.asList(
+                new ReportRecord(1L, 1L, "main", "a.B.m1()", 60, 0),
+                new ReportRecord(2L, 2L, "main", "a.B.m2()", 70, 0));
 
         String text = render(new Report(records, 0, 50));
 

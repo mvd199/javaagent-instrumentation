@@ -11,13 +11,13 @@ import java.util.Map;
 import java.util.Set;
 
 /** Human-readable report: top methods by total time, then a call tree per thread. */
-final class SummaryReporter implements Reporter {
+final class ReportTextFormatter implements ReportFormatter {
     static final int TOP_METHODS = 10;
     static final int MAX_TREE_LINES_PER_THREAD = 200;
 
     @Override
     public void write(Report report, PrintWriter out) {
-        List<CallRecord> calls = report.inCallOrder();
+        List<ReportRecord> calls = report.inCallOrder();
         writeHeader(report, calls, out);
         if (calls.isEmpty()) {
             out.println();
@@ -28,11 +28,11 @@ final class SummaryReporter implements Reporter {
         writeCallTrees(calls, out);
     }
 
-    private static void writeHeader(Report report, List<CallRecord> calls, PrintWriter out) {
+    private static void writeHeader(Report report, List<ReportRecord> calls, PrintWriter out) {
         Set<String> threads = new HashSet<>();
         long firstStart = Long.MAX_VALUE;
         long lastEnd = Long.MIN_VALUE;
-        for (CallRecord call : calls) {
+        for (ReportRecord call : calls) {
             threads.add(call.thread);
             firstStart = Math.min(firstStart, call.startNanos);
             lastEnd = Math.max(lastEnd, call.endNanos());
@@ -43,9 +43,9 @@ final class SummaryReporter implements Reporter {
                 report.thresholdMs, calls.size(), report.dropped, threads.size(), wallSeconds));
     }
 
-    private static void writeTopMethods(List<CallRecord> calls, PrintWriter out) {
+    private static void writeTopMethods(List<ReportRecord> calls, PrintWriter out) {
         Map<String, long[]> stats = new LinkedHashMap<>(); // {count, total, max}
-        for (CallRecord call : calls) {
+        for (ReportRecord call : calls) {
             long[] s = stats.computeIfAbsent(call.method, k -> new long[3]);
             s[0]++;
             s[1] += call.durationMs;
@@ -66,24 +66,24 @@ final class SummaryReporter implements Reporter {
         }
     }
 
-    private static void writeCallTrees(List<CallRecord> calls, PrintWriter out) {
+    private static void writeCallTrees(List<ReportRecord> calls, PrintWriter out) {
         long origin = calls.get(0).startNanos;
         long maxOffset = 0;
-        for (CallRecord call : calls) {
+        for (ReportRecord call : calls) {
             maxOffset = Math.max(maxOffset, (call.startNanos - origin) / 1_000_000L);
         }
         int offsetWidth = Math.max(4, String.valueOf(maxOffset).length());
         String treeLineFormat = "  [%" + offsetWidth + "d ms] %6d ms  %s%s";
 
-        Map<String, List<CallRecord>> byThread = new LinkedHashMap<>();
-        for (CallRecord call : calls) {
+        Map<String, List<ReportRecord>> byThread = new LinkedHashMap<>();
+        for (ReportRecord call : calls) {
             byThread.computeIfAbsent(call.thread, k -> new ArrayList<>()).add(call);
         }
-        for (Map.Entry<String, List<CallRecord>> thread : byThread.entrySet()) {
+        for (Map.Entry<String, List<ReportRecord>> thread : byThread.entrySet()) {
             out.println();
             out.println("--- Call tree: thread \"" + thread.getKey() + "\" --------------------------------------------");
-            List<CallRecord> threadCalls = thread.getValue();
-            for (CallRecord call : threadCalls.subList(0, Math.min(MAX_TREE_LINES_PER_THREAD, threadCalls.size()))) {
+            List<ReportRecord> threadCalls = thread.getValue();
+            for (ReportRecord call : threadCalls.subList(0, Math.min(MAX_TREE_LINES_PER_THREAD, threadCalls.size()))) {
                 out.println(String.format(Locale.ROOT, treeLineFormat,
                         (call.startNanos - origin) / 1_000_000L, call.durationMs, indent(call.depth), call.method));
             }

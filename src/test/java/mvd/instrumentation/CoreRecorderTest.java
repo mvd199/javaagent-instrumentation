@@ -5,20 +5,20 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class RecorderTest {
+public class CoreRecorderTest {
     private static long startedMillisAgo(long millis) {
         return System.nanoTime() - millis * 1_000_000L;
     }
 
     @Test
     public void keepsCallsAboveThresholdWithTheirDetails() {
-        Recorder recorder = new Recorder(50, 10, () -> 2);
+        CoreRecorder recorder = new CoreRecorder(50, 10);
 
-        recorder.record("a.B.slow()", startedMillisAgo(80));
+        recorder.record("a.B.slow()", startedMillisAgo(80), 2);
 
         Report report = recorder.snapshot();
         assertEquals(1, report.records.size());
-        CallRecord call = report.records.get(0);
+        ReportRecord call = report.records.get(0);
         assertEquals("a.B.slow()", call.method);
         assertEquals(Thread.currentThread().getName(), call.thread);
         assertEquals(2, call.depth);
@@ -29,27 +29,20 @@ public class RecorderTest {
 
     @Test
     public void ignoresCallsAtOrBelowThreshold() {
-        Recorder recorder = new Recorder(50, 10, () -> 0);
+        CoreRecorder recorder = new CoreRecorder(50, 10);
 
-        recorder.record("a.B.fast()", System.nanoTime());
+        recorder.record("a.B.fast()", System.nanoTime(), 0);
 
         assertTrue(recorder.snapshot().records.isEmpty());
         assertEquals(0, recorder.snapshot().dropped);
     }
 
     @Test
-    public void doesNotLookUpDepthForCallsBelowThreshold() {
-        Recorder recorder = new Recorder(50, 10, () -> { throw new AssertionError("depth must not be read"); });
-
-        recorder.record("a.B.fast()", System.nanoTime());
-    }
-
-    @Test
     public void dropsAndCountsCallsBeyondTheCap() {
-        Recorder recorder = new Recorder(0, 2, () -> 0);
+        CoreRecorder recorder = new CoreRecorder(0, 2);
 
         for (int i = 0; i < 5; i++) {
-            recorder.record("a.B.m" + i + "()", startedMillisAgo(10));
+            recorder.record("a.B.m" + i + "()", startedMillisAgo(10), 0);
         }
 
         Report report = recorder.snapshot();
@@ -59,12 +52,12 @@ public class RecorderTest {
 
     @Test
     public void acceptsConcurrentRecordsWithoutExceedingTheCap() throws Exception {
-        Recorder recorder = new Recorder(0, 100, () -> 0);
+        CoreRecorder recorder = new CoreRecorder(0, 100);
         Thread[] threads = new Thread[8];
         for (int t = 0; t < threads.length; t++) {
             threads[t] = new Thread(() -> {
                 for (int i = 0; i < 100; i++) {
-                    recorder.record("a.B.m()", startedMillisAgo(10));
+                    recorder.record("a.B.m()", startedMillisAgo(10), 0);
                 }
             });
             threads[t].start();

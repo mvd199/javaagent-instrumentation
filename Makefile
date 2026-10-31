@@ -37,14 +37,14 @@ demo: check-docker
 		mvd.demo.DemoApp
 
 bench: check-docker
-	$(DOCKER_RUN) mvn test-compile exec:java -Dexec.mainClass="mvd.instrumentation.ClassFilterBenchmark" $(ARGS)
+	$(DOCKER_RUN) mvn test-compile exec:java -Dexec.mainClass="mvd.instrumentation.CoreClassFilterBenchmark" $(ARGS)
 
 help:
 	@echo "Available targets:"
 	@echo "  make         - Run unit tests (default)"
 	@echo "  make test    - Run unit tests (pass ARGS='-Dtest=...' for specific test)"
 	@echo "  make package - Build the shaded agent JAR"
-	@echo "  make bench   - Run JMH microbenchmarks for ClassFilter"
+	@echo "  make bench   - Run JMH microbenchmarks for CoreClassFilter"
 	@echo "  make demo    - Build and run the interactive showcase demo (pass JAVA_OPTS='-Dmvd.instrumentation.report.format=json')"
 	@echo "  make clean   - Clean the build artifacts"
 	@echo "  make compile - Compile main source files"

@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JMH microbenchmark measuring the execution latency of {@link ClassFilter#test(String)}
+ * JMH microbenchmark measuring the execution latency of {@link CoreClassFilter#test(String)}
  * across common matching scenarios.
  * <ul>
  *   <li>Hit on exact match</li>
@@ -36,9 +36,9 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 3, time = 1, timeUnit = TimeUnit.SECONDS)
 @Fork(0)
 @State(Scope.Benchmark)
-public class ClassFilterBenchmark {
+public class CoreClassFilterBenchmark {
 
-    private ClassFilter filter;
+    private CoreClassFilter filter;
 
     private String exactHit;
     private String singleLevelHit;
@@ -62,7 +62,7 @@ public class ClassFilterBenchmark {
         patterns.add("com.example.data.**");
         patterns.add("com.example.model.**");
 
-        this.filter = new ClassFilter(patterns);
+        this.filter = new CoreClassFilter(patterns);
 
         this.exactHit = "com/example/service/Service25";
         this.singleLevelHit = "com/example/web/UserController";
@@ -98,7 +98,7 @@ public class ClassFilterBenchmark {
 
     public static void main(String[] args) throws Exception {
         Options opt = new OptionsBuilder()
-                .include(ClassFilterBenchmark.class.getSimpleName())
+                .include(CoreClassFilterBenchmark.class.getSimpleName())
                 .forks(0)
                 .warmupIterations(2)
                 .measurementIterations(3)

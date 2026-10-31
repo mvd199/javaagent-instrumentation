@@ -6,11 +6,11 @@ import java.util.Locale;
 /**
  * JSON lines (always {@code \n}-terminated, whatever the platform), one object per slow call, ordered so parents precede their children.
  */
-final class JsonReporter implements Reporter {
+final class ReportJsonFormatter implements ReportFormatter {
     @Override
     public void write(Report report, PrintWriter out) {
         StringBuilder sb = new StringBuilder();
-        for (CallRecord call : report.inCallOrder()) {
+        for (ReportRecord call : report.inCallOrder()) {
             sb.setLength(0);
             sb.append("{\"timestamp\":").append(call.timestampMillis);
             sb.append(",\"thread\":");

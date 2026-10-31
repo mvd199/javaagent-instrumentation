@@ -41,7 +41,7 @@ import javassist.ClassPool;
  *       transforming.</li>
  * </ul>
  */
-final class ClassFilter implements Predicate<String> {
+final class CoreClassFilter implements Predicate<String> {
     /** Internal-name prefixes that are never instrumented, including the agent's own package and its subpackages. */
     private static final String[] EXCLUDED_PREFIXES = {
             "java/", "javax/", "jdk/", "sun/", "com/sun/", internalPackage(ClassPool.class), internalPackage(DurationAgent.class)};
@@ -56,7 +56,7 @@ final class ClassFilter implements Predicate<String> {
     private final Pattern otherGlobs;
 
     /** {@code patterns} must already be trimmed and free of comments, as returned by {@link #parseLines}. */
-    ClassFilter(Collection<String> patterns) {
+    CoreClassFilter(Collection<String> patterns) {
         List<String> regexes = new ArrayList<>();
         for (String raw : patterns) {
             // Normalize dots to slashes for JVM internal class name format
@@ -83,11 +83,11 @@ final class ClassFilter implements Predicate<String> {
         this.otherGlobs = regexes.isEmpty() ? null : Pattern.compile(String.join("|", regexes));
     }
 
-    static ClassFilter fromPatterns(String... patterns) {
-        return new ClassFilter(Arrays.asList(patterns));
+    static CoreClassFilter fromPatterns(String... patterns) {
+        return new CoreClassFilter(Arrays.asList(patterns));
     }
 
-    static ClassFilter fromFile(String filePath) {
+    static CoreClassFilter fromFile(String filePath) {
         if (filePath == null || filePath.isEmpty()) {
             throw new IllegalArgumentException("Configuration file path is missing; pass it as -javaagent:<agent.jar>=<classes.cfg>");
         }
@@ -96,7 +96,7 @@ final class ClassFilter implements Predicate<String> {
             throw new IllegalArgumentException("Configuration file not found: " + filePath);
         }
         try {
-            return new ClassFilter(parseLines(Files.readAllLines(path, StandardCharsets.UTF_8)));
+            return new CoreClassFilter(parseLines(Files.readAllLines(path, StandardCharsets.UTF_8)));
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read configuration: " + filePath, e);
         }
