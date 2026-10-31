@@ -12,16 +12,22 @@ final class ReportJsonFormatter implements ReportFormatter {
         StringBuilder sb = new StringBuilder();
         for (ReportRecord call : report.inCallOrder()) {
             sb.setLength(0);
-            sb.append("{\"timestamp\":").append(call.timestampMillis);
-            sb.append(",\"thread\":");
-            quote(call.thread, sb);
-            sb.append(",\"method\":");
-            quote(call.method, sb);
-            sb.append(",\"durationMs\":").append(call.durationMs);
-            sb.append(",\"depth\":").append(call.depth);
-            sb.append("}\n");
+            appendRecord(call, sb);
+            sb.append('\n');
             out.print(sb.toString());
         }
+    }
+
+    /** One call as a JSON object, shared with {@link ReportHtmlFormatter} so both formats carry the same fields. */
+    static void appendRecord(ReportRecord call, StringBuilder sb) {
+        sb.append("{\"timestamp\":").append(call.timestampMillis);
+        sb.append(",\"thread\":");
+        quote(call.thread, sb);
+        sb.append(",\"method\":");
+        quote(call.method, sb);
+        sb.append(",\"durationMs\":").append(call.durationMs);
+        sb.append(",\"depth\":").append(call.depth);
+        sb.append('}');
     }
 
     private static void quote(String value, StringBuilder sb) {

@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -86,6 +87,15 @@ public class AgentConfigTest {
     }
 
     @Test
+    public void readsHtmlFormatAndStylesheet() {
+        AgentConfig config = config(AgentConfig.FORMAT_PROPERTY, "HTML", AgentConfig.STYLESHEET_PROPERTY, "/tmp/my.css");
+
+        assertEquals(ReportFormat.HTML, config.format);
+        assertEquals(java.nio.file.Paths.get("/tmp/my.css"), config.stylesheet.get());
+        assertFalse(config().stylesheet.isPresent());
+    }
+
+    @Test
     public void blankValuesFallBackToDefaults() {
         AgentConfig config = config(AgentConfig.FORMAT_PROPERTY, " ", AgentConfig.MAX_EVENTS_PROPERTY, "");
 
@@ -111,7 +121,7 @@ public class AgentConfigTest {
 
     @Test
     public void formatUsageListsEveryFormat() {
-        assertEquals("text or json", ReportFormat.usage());
+        assertEquals("text, json or html", ReportFormat.usage());
     }
 
     @Test
@@ -139,7 +149,7 @@ public class AgentConfigTest {
     @Test
     public void errorMessagesNameThePropertyAndValue() {
         assertMessage("mvd.instrumentation.agent.threshold must be between 0 and 180000: -5", AgentConfig.THRESHOLD_PROPERTY, "-5");
-        assertMessage("mvd.instrumentation.report.format must be text or json: xml", AgentConfig.FORMAT_PROPERTY, "xml");
+        assertMessage("mvd.instrumentation.report.format must be text, json or html: xml", AgentConfig.FORMAT_PROPERTY, "xml");
         assertMessage("mvd.instrumentation.agent.maxEvents must be an integer: lots", AgentConfig.MAX_EVENTS_PROPERTY, "lots");
     }
 

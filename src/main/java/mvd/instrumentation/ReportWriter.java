@@ -15,7 +15,15 @@ final class ReportWriter {
 
     ReportWriter(AgentConfig config) {
         this.config = config;
-        this.formatter = config.format == ReportFormat.JSON ? new ReportJsonFormatter() : new ReportTextFormatter();
+        this.formatter = formatterFor(config);
+    }
+
+    private static ReportFormatter formatterFor(AgentConfig config) {
+        switch (config.format) {
+            case JSON: return new ReportJsonFormatter();
+            case HTML: return new ReportHtmlFormatter(config.stylesheet);
+            default: return new ReportTextFormatter();
+        }
     }
 
     void write(Report report) {
