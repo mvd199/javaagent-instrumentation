@@ -1,13 +1,16 @@
 #!/bin/sh
 # Checks that the agent JAR built by `mvn package` relocates javassist and still works when the
-# application has its own javassist on the classpath. Needs `mvn test-compile package` first.
+# application has its own javassist on the classpath. Needs `mvn package` first (with test classes
+# compiled, as the demo app lives in src/test).
 set -eu
 JAR="${1:-target/java-instrumentation-1.0-SNAPSHOT.jar}"
 M2_REPO="${M2_REPO:-$HOME/.m2/repository}"
 HOST_JAVASSIST="$(find "$M2_REPO/org/javassist/javassist" -name 'javassist-*.jar' | head -n 1)"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-[ -f "$JAR" ] || fail "no agent JAR at $JAR"
+[ -f "$JAR" ] || fail "no agent JAR at $JAR; run make package first"
+[ -f target/test-classes/mvd/demo/DemoApp.class ] \
+    || fail "no compiled DemoApp; build without -Dmaven.test.skip"
 [ -n "$HOST_JAVASSIST" ] || fail "no javassist JAR under $M2_REPO"
 
 # 1. The JAR holds javassist only under the relocated package.

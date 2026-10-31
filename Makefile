@@ -22,11 +22,13 @@ test: check-docker
 	$(DOCKER_RUN) mvn test $(ARGS)
 	@scripts/coverage-summary.sh
 
+# Every packaged JAR is checked for javassist relocation.
 package: check-docker
 	$(DOCKER_RUN) mvn package $(ARGS)
+	@$(MAKE) --no-print-directory verify-shading
 
+# Checks the JAR built by `make package` without rebuilding it.
 verify-shading: check-docker
-	$(DOCKER_RUN) mvn test-compile package -DskipTests -B
 	$(DOCKER_RUN) env M2_REPO=/var/maven/.m2/repository scripts/verify-shading.sh
 
 compile: check-docker
@@ -48,8 +50,8 @@ help:
 	@echo "Available targets:"
 	@echo "  make         - Run unit tests (default)"
 	@echo "  make test    - Run unit tests (pass ARGS='-Dtest=...' for specific test)"
-	@echo "  make package - Build the shaded agent JAR"
-	@echo "  make verify-shading - Check that the agent JAR relocates javassist"
+	@echo "  make package - Build the shaded agent JAR and verify its javassist relocation"
+	@echo "  make verify-shading - Re-check the built agent JAR without rebuilding"
 	@echo "  make bench   - Run JMH microbenchmarks for CoreClassFilter"
 	@echo "  make demo    - Build and run the interactive showcase demo (pass JAVA_OPTS='-Dmvd.instrumentation.report.format=json')"
 	@echo "  make clean   - Clean the build artifacts"

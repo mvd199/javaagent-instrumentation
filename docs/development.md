@@ -16,8 +16,8 @@ If you have JDK 11+ and Maven installed locally, plain `mvn test` and `mvn packa
 |---|---|
 | `make` or `make test` | Runs the unit tests, then prints a JaCoCo coverage summary |
 | `make test ARGS="-Dtest=CoreRecorderTest"` | Runs a single test class |
-| `make package` | Builds the shaded agent JAR at `target/java-instrumentation-1.0-SNAPSHOT.jar` |
-| `make verify-shading` | Builds the agent JAR and runs [`verify-shading.sh`](../scripts/verify-shading.sh), which checks that javassist is relocated and that the agent works next to an application's own javassist |
+| `make package` | Builds the shaded agent JAR at `target/java-instrumentation-1.0-SNAPSHOT.jar`, then runs `make verify-shading` on it |
+| `make verify-shading` | Runs [`verify-shading.sh`](../scripts/verify-shading.sh) on the already built JAR: checks that javassist is relocated and that the agent works next to an application's own javassist |
 | `make demo` | Builds the agent and runs [`DemoApp`](../src/test/java/mvd/demo/DemoApp.java) with it attached (pass `JAVA_OPTS="..."` for report options) |
 | `make bench` | Runs the JMH microbenchmarks in [`CoreClassFilterBenchmark`](../src/test/java/mvd/instrumentation/CoreClassFilterBenchmark.java) |
 | `make clean` | Deletes `target/` |
