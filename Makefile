@@ -38,7 +38,7 @@ clean: check-docker
 	$(DOCKER_RUN) mvn clean $(ARGS)
 
 demo: check-docker
-	$(DOCKER_RUN) mvn test-compile package -DskipTests -B
+	$(DOCKER_RUN) mvn package -DskipTests -B
 	$(DOCKER_RUN) java $(JAVA_OPTS) -javaagent:target/java-instrumentation-1.0-SNAPSHOT.jar=demo.cfg \
 		-cp target/test-classes \
 		mvd.demo.DemoApp

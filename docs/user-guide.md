@@ -10,9 +10,7 @@ Supports:
 - **Single-level wildcard**: `com.mycompany.service.*` (matches direct classes in package)
 - **Recursive wildcard**: `com.mycompany.repository.**` (matches package and all subpackages)
 
-JDK classes (`java.*`, `javax.*`, `jdk.*`, `sun.*`, `com.sun.*`), javassist and the agent's own classes are never instrumented, because instrumenting them can abort JVM startup or stop the report from being written. A pattern that covers them logs a warning, and a bare `**` is rejected at startup.
-
-The agent JAR carries its own copy of javassist, relocated to `mvd.instrumentation.shaded.javassist`, so it does not clash with a javassist version your application ships (Hibernate, Quarkus and others use it).
+JDK classes (`java.*`, `javax.*`, `jdk.*`, `sun.*`, `com.sun.*`) and the agent's own classes (`mvd.instrumentation.**`, including its bundled copy of javassist relocated to `mvd.instrumentation.shaded.javassist`) are never instrumented, because instrumenting them can abort JVM startup or stop the report from being written. A pattern that covers them logs a warning, and a bare `**` is rejected at startup. Because the bundled javassist is relocated, it does not clash with a javassist version your application ships (Hibernate, Quarkus and others use it).
 
 ```text
 # Exact service class

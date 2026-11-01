@@ -5,7 +5,8 @@
 set -eu
 JAR="${1:-target/java-instrumentation-1.0-SNAPSHOT.jar}"
 M2_REPO="${M2_REPO:-$HOME/.m2/repository}"
-HOST_JAVASSIST="$(find "$M2_REPO/org/javassist/javassist" -name 'javassist-*.jar' | head -n 1)"
+HOST_JAVASSIST="$(find "$M2_REPO/org/javassist/javassist" -name 'javassist-*.jar' \
+    ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 [ -f "$JAR" ] || fail "no agent JAR at $JAR; run make package first"
@@ -27,9 +28,9 @@ LOG="$(mktemp)"
 trap 'rm -f "$LOG"' EXIT
 java -verbose:class -javaagent:"$JAR"=demo.cfg -cp "target/test-classes:$HOST_JAVASSIST" \
     mvd.demo.DemoApp > "$LOG" 2>&1 || { cat "$LOG" >&2; fail "demo exited with an error"; }
-grep -q 'mvd\.instrumentation\.shaded\.javassist\.ClassPool source: .*'"$(basename "$JAR")" "$LOG" \
+grep -q 'mvd\.instrumentation\.shaded\.javassist\.ClassPool .*'"$(basename "$JAR")" "$LOG" \
     || fail "agent did not load its relocated javassist"
-if grep -q '\] javassist\.' "$LOG"; then
+if grep -Eq '(\]|Loaded) javassist\.' "$LOG"; then
     fail "agent loaded the application's javassist"
 fi
 grep -q 'recorded: [1-9]' "$LOG" || { cat "$LOG" >&2; fail "demo report recorded no calls"; }
