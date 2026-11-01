@@ -40,6 +40,9 @@ import javassist.ClassPool;
  *   <li>javassist runs inside the transformer, so instrumenting it would transform the code doing the
  *       transforming.</li>
  * </ul>
+ * The packaged agent JAR relocates javassist to {@code mvd.instrumentation.shaded.javassist}, so there the
+ * javassist prefix lies inside the agent package, and an application's own {@code javassist.*} classes, which
+ * the agent never runs, are treated like any other library.
  */
 final class CoreClassFilter implements Predicate<String> {
     /** Internal-name prefixes that are never instrumented, including the agent's own package and its subpackages. */

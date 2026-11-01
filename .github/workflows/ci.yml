@@ -15,8 +15,10 @@ jobs:
           distribution: temurin
           java-version: '11'
           cache: maven
-      - name: Run tests
-        run: mvn -B test
+      - name: Run tests and package the agent
+        run: mvn -B verify
+      - name: Verify javassist relocation
+        run: scripts/verify-shading.sh
       - name: Coverage summary
         if: always()
         run: scripts/coverage-summary.sh | tee -a "$GITHUB_STEP_SUMMARY"

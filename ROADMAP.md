@@ -9,7 +9,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 - [x] **1. Exception Handling in Instrumented Methods** *(High Priority / Bug Fix)*
 - [x] **2. Configurable Duration Threshold** *(High Priority / Usability)*
 - [x] **3. Wildcard & Package Prefix Matching** *(High Priority / Usability)*
-- [ ] **4. Shaded Dependency Relocation** *(Medium Priority / Safety)*
+- [x] **4. Shaded Dependency Relocation** *(Medium Priority / Safety)*
 - [x] **5. Call Depth & Hierarchy Indentation** *(Medium Priority / UX)*
 - [x] **6. Structured & Configurable Output Format (JSON / Sinks)** *(Medium Priority / UX)*
 - [ ] **7. Support for Modern Java Editions & Tooling** *(Long-term / Modernization)*
@@ -72,7 +72,7 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 ---
 
 ### 4. Shaded Dependency Relocation (`pom.xml`)
-* **Status**: Open
+* **Status**: Completed
 * **Priority**: Medium (Safety)
 * **Problem**: The `maven-shade-plugin` packages `org.javassist:javassist` into the agent fat JAR without package relocation. If the target application being profiled also uses Javassist (e.g. Hibernate, Quarkus), classpath conflicts or `LinkageError` can occur.
 * **Proposed Solution**:
@@ -88,6 +88,9 @@ This document tracks planned improvements, bug fixes, and architectural evolutio
 * **Acceptance Criteria**:
   * Packaged JAR contains Javassist classes under `mvd.instrumentation.shaded.javassist.*`.
   * Agent operates without interfering with host application dependencies.
+* **Notes**:
+  * [`scripts/verify-shading.sh`](scripts/verify-shading.sh) (run in CI and by `make verify-shading`) checks the JAR contents and runs the demo with a host copy of javassist on the classpath.
+  * `make demo` no longer puts `target/classes` on the classpath: the unshaded agent classes there shadowed the agent JAR, so the demo ran against unrelocated javassist. Keeping the agent off the application classpath in general is item #9.
 
 ---
 
